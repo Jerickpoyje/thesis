@@ -1,0 +1,430 @@
+/* ==============================
+   GLOBAL STYLING — DARK THEME
+   ============================== */
+
+   body {
+    font-family: "Poppins", sans-serif;
+    background: #0f0f0f;
+    color: #e0e0e0;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  
+  /* ==============================
+     HEADER
+     ============================== */
+  
+  .header {
+    background: #121212;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 30px;
+    border-bottom: 1px solid #1f1f1f;
+    box-shadow: 0 2px 10px rgba(0, 255, 100, 0.1);
+  }
+  
+  .logo-container {
+    display: flex;
+    align-items: center;
+  }
+  
+  .logo-icon {
+    font-size: 1.8rem;
+    margin-right: 10px;
+  }
+  
+  .logo-text {
+    font-weight: 700;
+    font-size: 1.3rem;
+    color: #00ff99;
+    letter-spacing: 1px;
+  }
+  
+  .nav-links a {
+    color: #bfbfbf;
+    text-decoration: none;
+    margin-left: 25px;
+    font-weight: 500;
+    transition: 0.3s;
+  }
+  
+  .nav-links a:hover {
+    color: #00ff99;
+    text-shadow: 0 0 8px #00ff99;
+  }
+  
+  /* ==============================
+     MAIN LAYOUT
+     ============================== */
+  
+  .main-layout {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    flex-grow: 1;
+  }
+  
+  /* ==============================
+     MAP & CHART AREA
+     ============================== */
+  
+  .map-container {
+    flex: 2.3;
+    background: #181818;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 0 15px rgba(0, 255, 100, 0.08);
+  }
+  
+  .main-title {
+    text-align: center;
+    color: #00ff99;
+    margin-bottom: 15px;
+    font-size: 1.4rem;
+  }
+  
+  #map {
+    height: 400px;
+    border-radius: 10px;
+    margin-bottom: 25px;
+    border: 1px solid #222;
+  }
+  
+  /* ==============================
+     CHARTS
+     ============================== */
+  
+  .chart-card {
+    background: #101010;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 25px;
+    border: 1px solid #1e1e1e;
+    box-shadow: 0 0 10px rgba(0, 255, 100, 0.07);
+  }
+  
+  .result-title {
+    color: #00ff99;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+  }
+  
+  /* ==============================
+     FARMS DATA TABLE
+     ============================== */
+  
+  .farms-card {
+    background: #101010;
+    border-radius: 10px;
+    padding: 20px;
+    border: 1px solid #1f1f1f;
+    box-shadow: 0 0 10px rgba(0, 255, 100, 0.08);
+  }
+  
+  .farm-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+  }
+  
+  .farm-actions {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .styled-input {
+    background: #181818;
+    border: 1px solid #2c2c2c;
+    color: #e0e0e0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  
+  .styled-input:focus {
+    border-color: #00ff99;
+    outline: none;
+    box-shadow: 0 0 6px #00ff99;
+  }
+  
+  .styled-select {
+    background: #181818;
+    border: 1px solid #2c2c2c;
+    color: #e0e0e0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  
+  .run-analysis-btn {
+    background: #00ff99;
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: 0.3s;
+  }
+  
+  .run-analysis-btn:hover {
+    background: #00ffaa;
+    box-shadow: 0 0 10px #00ff99;
+  }
+  
+  .gray-btn {
+    background: #333;
+    color: #e0e0e0;
+  }
+  
+  .gray-btn:hover {
+    background: #444;
+  }
+  
+  .green-btn {
+    background: #00ff99;
+  }
+  
+  .blue-btn {
+    background: #00b3ff;
+  }
+  
+  .farm-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: #e0e0e0;
+  }
+  
+  .farm-table th,
+  .farm-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #2c2c2c;
+  }
+  
+  .farm-table th {
+    color: #00ff99;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+  }
+  
+  /* ==============================
+     RIGHT PANEL — ANALYSIS MODULE
+     ============================== */
+  
+  .analysis-panel {
+    flex: 1.2;
+    background: #121212;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #1f1f1f;
+    box-shadow: 0 0 15px rgba(0, 255, 100, 0.1);
+  }
+  
+  .panel-heading {
+    color: #00ff99;
+    font-size: 1.2rem;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 12px;
+  }
+  
+  .input-group label {
+    margin-bottom: 5px;
+    color: #bfbfbf;
+    font-size: 0.85rem;
+  }
+  
+  .btn-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+  }
+  
+  .loader {
+    display: none;
+    color: #00ff99;
+    text-align: center;
+    margin-top: 15px;
+    animation: pulse 1.4s infinite;
+  }
+  
+  @keyframes pulse {
+    0% { opacity: 0.3; }
+    50% { opacity: 1; }
+    100% { opacity: 0.3; }
+  }
+  
+  /* ==============================
+     RESULT GAUGE
+     ============================== */
+  
+  .result-display-area {
+    background: #0f0f0f;
+    border-radius: 10px;
+    padding: 15px;
+    margin-top: 20px;
+    text-align: center;
+    border: 1px solid #1e1e1e;
+    box-shadow: 0 0 10px rgba(0, 255, 100, 0.08);
+  }
+  
+  #prodVal {
+    font-size: 1.5rem;
+    color: #00ff99;
+    margin-top: 10px;
+  }
+  
+  #confPct {
+    font-size: 0.9rem;
+    color: #bfbfbf;
+  }
+  
+  /* ==============================
+     SCROLLBAR
+     ============================== */
+  
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #00ff99;
+    border-radius: 10px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #0f0f0f;
+  }
+
+  /* ==============================
+     MEETING REQUEST PAGE
+     ============================== */
+
+  .meeting-page-layout {
+    display: block;
+    padding: 26px 22px 40px;
+  }
+
+  .meeting-request-card {
+    max-width: 760px;
+    margin: 0 auto;
+    background: linear-gradient(180deg, #0f1b1a 0%, #142725 100%);
+    border: 1px solid rgba(95, 179, 137, 0.35);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  }
+
+  .meeting-panel-heading {
+    margin-top: 0;
+    margin-bottom: 8px;
+    color: #7dffcb;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+  }
+
+  .meeting-request-subtitle {
+    margin-top: 0;
+    margin-bottom: 16px;
+    color: #f1f7f2;
+    font-weight: 500;
+    font-size: 0.95rem;
+  }
+
+  .meeting-request-form-panel {
+    margin-top: 14px;
+    background: #f4f8f5;
+    border: 1px solid #cfe1d4;
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .meeting-request-form-panel .input-group label.meeting-form-label {
+    margin-bottom: 6px;
+    color: #111111;
+    font-weight: 700;
+    font-size: 1.05rem;
+  }
+
+  .meeting-form-input {
+    width: 100%;
+    background: #ffffff;
+    border: 1px solid #bfd5c4;
+    color: #111111;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 1.02rem;
+    line-height: 1.35;
+    box-sizing: border-box;
+  }
+
+  .meeting-form-input::placeholder {
+    color: #4f4f4f;
+  }
+
+  .meeting-form-input:focus {
+    border-color: #4c956d;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(76, 149, 109, 0.18);
+  }
+
+  .meeting-form-textarea {
+    resize: vertical;
+    min-height: 128px;
+  }
+
+  .meeting-form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .meeting-form-col {
+    margin-bottom: 0;
+  }
+
+  .meeting-form-actions {
+    margin-top: 12px;
+  }
+
+  .meeting-form-submit {
+    width: 100%;
+    background: #1f8f5f;
+    color: #ffffff;
+    padding: 11px 16px;
+    border-radius: 8px;
+  }
+
+  .meeting-form-submit:hover {
+    background: #1a7a51;
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  }
+
+  .meeting-form-success-message {
+    color: #1f5c3f;
+    margin-top: 10px;
+    font-size: 0.9rem;
+    background: #eaf6ef;
+    border: 1px solid #beddc7;
+    border-radius: 8px;
+    padding: 10px;
+  }
+
+  @media (max-width: 760px) {
+    .meeting-form-row {
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+  }
+  
