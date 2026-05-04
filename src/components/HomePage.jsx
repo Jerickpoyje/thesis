@@ -74,7 +74,6 @@ export default function HomePage() {
   })
   const [meetingRequestMessage, setMeetingRequestMessage] = useState('')
   const [isFadingOut, setIsFadingOut] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const timeoutRef = useRef(null)
 
   useEffect(() => {
@@ -93,82 +92,14 @@ export default function HomePage() {
     }
   }, [])
 
-  // CRITICAL: User pages must NEVER show edit mode for regular users
-  // But admins CAN edit these pages - only strip ?edit=true if NOT admin
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    if (params.has('edit') && !isAdminLoggedIn) {
-      navigate('/home', { replace: true })
-    }
-  }, [navigate, location.search, isAdminLoggedIn])
-
-
-
-  // Load CMS content from backend on page mount
-  useEffect(() => {
-    const loadCMSContent = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/cms/page/home`)
-        if (response.ok) {
-          const data = await response.json()
-          console.log('Loaded CMS content from backend:', data)
-          
-          // Backend returns {content: {section: {key: value}}}
-          const cmsData = data.content || {}
-          
-          // Update state with loaded data
-          if (cmsData.hero) {
-            setPageContent(prev => ({ ...prev, hero: cmsData.hero }))
-          }
-          if (cmsData.about) {
-            setPageContent(prev => ({ ...prev, about: cmsData.about }))
-          }
-          if (cmsData.varieties) {
-            setPageContent(prev => ({ ...prev, varieties: cmsData.varieties }))
-          }
-          if (cmsData.meeting) {
-            setPageContent(prev => ({ ...prev, meeting: cmsData.meeting }))
-          }
-        }
-      } catch (error) {
-        console.log('Note: No saved CMS content yet, using defaults:', error.message)
-      }
-    }
-    
-    loadCMSContent()
-  }, [])
-
+  // (CMS removed) navigation helper simplified
   const navigateWithFade = (event, href) => {
     const targetRoute = toAppRoute(href)
     if (!targetRoute) { event.preventDefault(); return }
     event.preventDefault()
     setIsFadingOut(true)
-    // If in edit mode, append ?edit=true to preserve edit state when navigating to other pages
-    const finalRoute = shouldShowEditUI ? `${targetRoute}?edit=true` : targetRoute
-    timeoutRef.current = window.setTimeout(() => navigate(finalRoute), FADE_DURATION_MS)
+    timeoutRef.current = window.setTimeout(() => navigate(targetRoute), FADE_DURATION_MS)
   }
-
-  const handleSaveChanges = async () => {
-  setIsSaving(true)
-  try {
-    const response = await fetch(`${API_BASE}/cms/page/home`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pageContent),
-    })
-    if (response.ok) {
-      alert('✓ Changes saved successfully!')
-      navigate('/cms', { replace: true })  // ← go back to CMS, not home
-    } else {
-      alert('❌ Failed to save changes')
-    }
-  } catch (error) {
-    console.error('Error saving:', error)
-    alert('❌ Error saving changes')
-  } finally {
-    setIsSaving(false)
-  }
-}
 
   const handleMeetingFieldChange = (event) => {
     const { target: { name, value } } = event
@@ -214,68 +145,11 @@ export default function HomePage() {
     }
   }
 
-  // Compute whether to show edit UI in real-time
-  const shouldShowEditUI = isAdminLoggedIn && new URLSearchParams(location.search).get('edit') === 'true'
+  // Edit UI removed
 
   return (
-    <div className={`coffee-homepage-body${isFadingOut ? ' fade-out' : ''}`} style={(isAdminLoggedIn && new URLSearchParams(location.search).get('edit') === 'true') ? { paddingTop: '80px' } : {}}>
+    <div className={`coffee-homepage-body${isFadingOut ? ' fade-out' : ''}`} style={{}}>
       {/* Compute edit mode in real-time: only show if BOTH admin is logged in AND URL has ?edit=true */}
-      {isAdminLoggedIn && new URLSearchParams(location.search).get('edit') === 'true' && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 999,
-          backgroundColor: '#1e8449',
-          color: 'white',
-          padding: '16px 24px',
-          textAlign: 'center',
-          fontSize: '16px',
-          fontWeight: 'bold',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '16px',
-          borderBottom: '3px solid #155a34',
-        }}>
-          ✏️ EDIT MODE - Editing Home Page
-          <button
-            onClick={handleSaveChanges}
-            disabled={isSaving}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: isSaving ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            {isSaving ? '💾 Saving...' : '💾 Save Changes'}
-          </button>
-          <button
-            onClick={() => navigate('/cms', { replace: true })}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#dc3545',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            ❌ Cancel
-          </button>
-        </div>
-      )}
 
       {/* ── Navbar ── */}
       <div className="top-nav">
@@ -291,11 +165,6 @@ export default function HomePage() {
               href={link.href}
               className={link.isActive ? 'active' : undefined}
               onClick={(event) => {
-                if (shouldShowEditUI && link.href === 'about.html') {
-                 event.preventDefault()
-                navigate('/about?edit=true')
-                 return
-                 }
                 navigateWithFade(event, link.href)
                   }}
             >
@@ -310,29 +179,10 @@ export default function HomePage() {
         <section className="hero-section">
           <div className="hero-content">
             <p className="hero-kicker">GIS-Powered Coffee Forecasting</p>
-            {shouldShowEditUI ? (
-              <input
-                type="text"
-                value={pageContent.hero.title}
-                onChange={(e) => setPageContent(prev => ({ ...prev, hero: { ...prev.hero, title: e.target.value } }))}
-                className="hero-title"
-                style={{ width: '100%', padding: '8px', fontSize: '2.5em', fontWeight: 'bold' }}
-              />
-            ) : (
-              <h1 className="hero-title">{pageContent.hero.title}</h1>
-            )}
-            {shouldShowEditUI ? (
-              <textarea
-                value={pageContent.hero.subtitle}
-                onChange={(e) => setPageContent(prev => ({ ...prev, hero: { ...prev.hero, subtitle: e.target.value } }))}
-                className="hero-subtitle"
-                style={{ width: '100%', padding: '8px', minHeight: '60px', fontSize: '1.1em' }}
-              />
-            ) : (
-              <p className="hero-subtitle">
-                {pageContent.hero.subtitle}
-              </p>
-            )}
+            <h1 className="hero-title">{pageContent.hero.title}</h1>
+            <p className="hero-subtitle">
+              {pageContent.hero.subtitle}
+            </p>
           </div>
           <div className="hero-image-placeholder">
             <img src={homePicture} alt="Hero section" className="hero-image-placeholder" />
@@ -341,31 +191,13 @@ export default function HomePage() {
 
         {/* ── About ── */}
         <section className="about-section">
-          {shouldShowEditUI ? (
-            <input
-              type="text"
-              value={pageContent.about.title}
-              onChange={(e) => setPageContent(prev => ({ ...prev, about: { ...prev.about, title: e.target.value } }))}
-              className="section-title"
-              style={{ width: '100%', padding: '8px', fontSize: '1.8em', fontWeight: 'bold' }}
-            />
-          ) : (
-            <h2 className="section-title">{pageContent.about.title}</h2>
-          )}
+          <h2 className="section-title">{pageContent.about.title}</h2>
           <div className="about-content-grid">
             <div className="about-content">
               <div className="about-text">
-                {shouldShowEditUI ? (
-                  <textarea
-                    value={pageContent.about.text}
-                    onChange={(e) => setPageContent(prev => ({ ...prev, about: { ...prev.about, text: e.target.value } }))}
-                    style={{ width: '100%', padding: '8px', minHeight: '150px', fontSize: '1em' }}
-                  />
-                ) : (
-                  pageContent.about.text.split('\n\n').map((para, i) => (
-                    <p key={i}>{para}</p>
-                  ))
-                )}
+                {pageContent.about.text.split('\n\n').map((para, i) => (
+                  <p key={i}>{para}</p>
+                ))}
               </div>
             </div>
             <div className="about-image-placeholder">
@@ -384,16 +216,7 @@ export default function HomePage() {
                   <img src={variety.image} alt={variety.alt} className={`variety-image-placeholder ${variety.key}`} />
                 </div>
                 <div className="variety-info">
-                  {shouldShowEditUI ? (
-                    <input
-                      type="text"
-                      value={pageContent.varieties[variety.key]}
-                      onChange={(e) => setPageContent(prev => ({ ...prev, varieties: { ...prev.varieties, [variety.key]: e.target.value } }))}
-                      style={{ width: '100%', padding: '8px', fontSize: '1.2em', fontWeight: 'bold' }}
-                    />
-                  ) : (
-                    <h3>{pageContent.varieties[variety.key]}</h3>
-                  )}
+                  <h3>{pageContent.varieties[variety.key]}</h3>
                 </div>
               </article>
             ))}
@@ -402,29 +225,10 @@ export default function HomePage() {
 
         {/* ── Meeting request form ── */}
         <section className="meeting-request-card home-meeting-request-card">
-          {shouldShowEditUI ? (
-            <input
-              type="text"
-              value={pageContent.meeting.title}
-              onChange={(e) => setPageContent(prev => ({ ...prev, meeting: { ...prev.meeting, title: e.target.value } }))}
-              className="panel-heading meeting-panel-heading"
-              style={{ width: '100%', padding: '8px', fontSize: '1.8em', fontWeight: 'bold' }}
-            />
-          ) : (
-            <h1 className="panel-heading meeting-panel-heading">{pageContent.meeting.title}</h1>
-          )}
-          {shouldShowEditUI ? (
-            <textarea
-              value={pageContent.meeting.subtitle}
-              onChange={(e) => setPageContent(prev => ({ ...prev, meeting: { ...prev.meeting, subtitle: e.target.value } }))}
-              className="meeting-request-subtitle"
-              style={{ width: '100%', padding: '8px', minHeight: '60px', fontSize: '1em' }}
-            />
-          ) : (
-            <p className="meeting-request-subtitle">
-              {pageContent.meeting.subtitle}
-            </p>
-          )}
+          <h1 className="panel-heading meeting-panel-heading">{pageContent.meeting.title}</h1>
+          <p className="meeting-request-subtitle">
+            {pageContent.meeting.subtitle}
+          </p>
 
           <form onSubmit={handleMeetingRequestSubmit} className="meeting-request-form-panel">
             <div className="meeting-form-row">

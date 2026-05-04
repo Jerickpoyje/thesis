@@ -1,7 +1,6 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AboutPage from './components/AboutPage'
 import AdminPage from './components/AdminPage'
-import CMSPage from './components/CMSPage'
 import GeoDataPage from './components/GeoDataPage'
 import HomePage from './components/HomePage'
 import IndexPage from './components/IndexPage'
@@ -12,7 +11,6 @@ import ProfilePage from './components/ProfilePage'
 import ReportsPage from './components/ReportsPage'
 import SoilTypesPage from './components/SoilTypesPage'
 import UsersPage from './components/UsersPage'
-import AdminUiEditor from './components/AdminUiEditor'
 import { isAdminAuthenticated } from './utils/auth'
 
 function AdminProtectedRoute({ children, showLoginOnSameUrl = false }) {
@@ -33,9 +31,7 @@ function AdminProtectedRoute({ children, showLoginOnSameUrl = false }) {
 export default function App() {
   const location = useLocation()
   
-  // Only show AdminUiEditor on admin pages
   const isAdminPage = location.pathname.startsWith('/admin') || 
-                      location.pathname.startsWith('/cms') ||
                       location.pathname.startsWith('/users') ||
                       location.pathname.startsWith('/reports') ||
                       location.pathname.startsWith('/models') ||
@@ -46,7 +42,6 @@ export default function App() {
 
   return (
     <>
-      {isAdminPage && <AdminUiEditor />}
       <Routes>
         <Route path="/" element={<Navigate to="/home" replace />} />
 
@@ -72,16 +67,7 @@ export default function App() {
         />
         <Route path="/admin.html" element={<Navigate to="/admin" replace />} />
 
-        <Route
-          path="/cms"
-          element={
-            <AdminProtectedRoute>
-              <CMSPage />
-            </AdminProtectedRoute>
-          }
-        />
-        <Route path="/cms.html" element={<Navigate to="/cms" replace />} />
-
+        
       <Route
         path="/models"
         element={

@@ -15,7 +15,6 @@ const ADMIN_VIEWS = {
 const quickLinks = [
   { label: 'Predictive Map', href: 'admin.html?view=map' },
   { label: 'Analytics Dashboard', href: 'admin.html' },
-  { label: 'Content Management', href: 'cms.html' },
   { label: 'User Requests', href: 'users.html' },
   { label: 'Generate Reports', href: 'reports.html' },
 ]

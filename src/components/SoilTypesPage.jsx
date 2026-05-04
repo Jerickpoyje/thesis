@@ -8,7 +8,6 @@ const FADE_DURATION_MS = 500
 const quickLinks = [
   { label: 'Predictive Map', href: 'Index.html' },
   { label: 'Analytics Dashboard', href: 'admin.html' },
-  { label: 'Content Management', href: 'cms.html' },
   { label: 'User Requests', href: 'users.html' },
   { label: 'Generate Reports', href: 'reports.html' },
 ]

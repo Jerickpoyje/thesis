@@ -123,22 +123,7 @@ export default function AboutPage() {
   
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isAdminAuthenticated())
   const [isFadingOut, setIsFadingOut] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const timeoutRef = useRef(null)
-  const [cmsContent, setCmsContent] = useState({
-    main: {
-      title: 'The Heart of Amadeo Cavite\'s Coffee: Our Upland Varieties',
-      description: 'Exploring the unique characteristics of Robusta, Liberica, and Excelsa, the foundation of the region\'s rich coffee heritage.'
-    },
-    mission: {
-      text: ''
-    },
-    vision: {
-      text: ''
-    },
-    varieties: {},
-    articles: {}
-  })
 
   useEffect(() => {
     return () => {
@@ -165,127 +150,19 @@ export default function AboutPage() {
     }
   }, [navigate, location.search, isAdminLoggedIn])
 
-  // Load CMS content from backend on page mount
-  useEffect(() => {
-    const loadCMSContent = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/cms/page/about`)
-        if (response.ok) {
-          const data = await response.json()
-          console.log('Loaded About CMS content from backend:', data)
-          
-          // Backend returns {content: {section: {key: value}}}
-          const cmsData = data.content || {}
-          
-          // Update state with loaded data
-          setCmsContent(prev => ({
-            main: cmsData.main || prev.main,
-            mission: cmsData.mission || prev.mission,
-            vision: cmsData.vision || prev.vision
-          }))
-        }
-      } catch (error) {
-        console.log('Note: No saved CMS content for about page yet, using defaults:', error.message)
-      }
-    }
-    
-    loadCMSContent()
-  }, [])
 
   const navigateWithFade = (event, href) => {
     const targetRoute = toAppRoute(href)
     if (!targetRoute) { event.preventDefault(); return }
     event.preventDefault()
     setIsFadingOut(true)
-    // If in edit mode, append ?edit=true to preserve edit state when navigating to other pages
-    const finalRoute = shouldShowEditUI ? `${targetRoute}?edit=true` : targetRoute
-    timeoutRef.current = window.setTimeout(() => navigate(finalRoute), FADE_DURATION_MS)
+    timeoutRef.current = window.setTimeout(() => navigate(targetRoute), FADE_DURATION_MS)
   }
 
-  const handleSaveChanges = async () => {
-    setIsSaving(true)
-    try {
-      const response = await fetch(`${API_BASE}/cms/page/about`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cmsContent),
-      })
-      if (response.ok) {
-        alert('✓ Changes saved successfully!')
-        navigate('/cms', { replace: true })
-      } else {
-        alert('❌ Failed to save changes')
-      }
-    } catch (error) {
-      console.error('Error saving:', error)
-      alert('❌ Error saving changes')
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  // Compute whether to show edit UI in real-time
-  const shouldShowEditUI = isAdminLoggedIn && new URLSearchParams(location.search).get('edit') === 'true'
 
   return (
-    <div className={`coffee-homepage-body about-page-body${isFadingOut ? ' fade-out' : ''}`} style={(isAdminLoggedIn && new URLSearchParams(location.search).get('edit') === 'true') ? { paddingTop: '80px' } : {}}>
-      {/* Edit mode toolbar - only show if BOTH admin is logged in AND URL has ?edit=true */}
-      {isAdminLoggedIn && new URLSearchParams(location.search).get('edit') === 'true' && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 999,
-          backgroundColor: '#1e8449',
-          color: 'white',
-          padding: '16px 24px',
-          textAlign: 'center',
-          fontSize: '16px',
-          fontWeight: 'bold',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '16px',
-          borderBottom: '3px solid #155a34',
-        }}>
-          ✏️ EDIT MODE - Editing About Page
-          <button
-            onClick={handleSaveChanges}
-            disabled={isSaving}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: isSaving ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            {isSaving ? '💾 Saving...' : '💾 Save Changes'}
-          </button>
-          <button
-            onClick={() => navigate('/cms', { replace: true })}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#dc3545',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            ❌ Cancel
-          </button>
-        </div>
-      )}
+    <div className={`coffee-homepage-body about-page-body${isFadingOut ? ' fade-out' : ''}`} style={{}}>
+      {/* Edit mode toolbar removed */}
 
       {/* ── Navbar ── */}
       <div className="top-nav">
@@ -300,11 +177,6 @@ export default function AboutPage() {
               key={link.label}
               href={link.href}
               onClick={(event) => {
-                if (shouldShowEditUI && link.href === 'home.html') {
-                  event.preventDefault()
-                  navigate('/home?edit=true')
-                  return
-                }
                 navigateWithFade(event, link.href)
               }}
               className={link.isActive ? 'active' : undefined}
@@ -317,86 +189,29 @@ export default function AboutPage() {
 
       <div className="homepage-layout">
         <div className="page-hero-header">
-          {shouldShowEditUI ? (
-            <input
-              type="text"
-              value={cmsContent.main?.title || ''}
-              onChange={(e) => setCmsContent(prev => ({ ...prev, main: { ...prev.main, title: e.target.value } }))}
-              className="page-title"
-              style={{ width: '100%', padding: '12px', fontSize: '2.5em', fontWeight: 'bold', color: '#42dc94', marginBottom: '16px' }}
-            />
-          ) : (
-            <h1 className="page-title">
-              {cmsContent.main?.title || 'The Heart of Amadeo Cavite\'s Coffee: Our Upland Varieties'}
-            </h1>
-          )}
-          {shouldShowEditUI ? (
-            <textarea
-              value={cmsContent.main?.description || ''}
-              onChange={(e) => setCmsContent(prev => ({ ...prev, main: { ...prev.main, description: e.target.value } }))}
-              className="page-subtitle"
-              style={{ width: '100%', padding: '12px', minHeight: '80px', fontSize: '1em', marginBottom: '16px' }}
-            />
-          ) : (
-            <p className="page-subtitle">
-              {cmsContent.main?.description || 'Exploring the unique characteristics of Robusta, Liberica, and Excelsa, the foundation of the region\'s rich coffee heritage.'}
-            </p>
-          )}
+          <h1 className="page-title">
+            The Heart of Amadeo Cavite's Coffee: Our Upland Varieties
+          </h1>
+          <p className="page-subtitle">
+            Exploring the unique characteristics of Robusta, Liberica, and Excelsa, the foundation of the region's rich coffee heritage.
+          </p>
         </div>
 
         <div className="variety-grid">
           {varietyCards.map((variety) => {
-            const editData = cmsContent.varieties?.[variety.key] || {
-              title: variety.title,
-              tagline: variety.tagline,
-              description: variety.description,
-              features: variety.features
-            }
-            
             return (
             <article key={variety.key} className="variety-card card variety-card-full-info">
               <div className={`variety-image-placeholder ${variety.key}`}>
                 <img src={variety.image} alt={variety.imageAlt} className={`variety-image-placeholder ${variety.key}`} />
               </div>
               <div className="variety-info">
-                {shouldShowEditUI ? (
-                  <>
-                    <input
-                      type="text"
-                      value={editData.title || variety.title}
-                      onChange={(e) => setCmsContent(prev => ({
-                        ...prev,
-                        varieties: { ...prev.varieties, [variety.key]: { ...editData, title: e.target.value } }
-                      }))}
-                      style={{ width: '100%', padding: '6px', fontSize: '1.1em', fontWeight: 'bold', marginBottom: '8px' }}
-                    />
-                    <input
-                      type="text"
-                      value={editData.tagline || variety.tagline}
-                      onChange={(e) => setCmsContent(prev => ({
-                        ...prev,
-                        varieties: { ...prev.varieties, [variety.key]: { ...editData, tagline: e.target.value } }
-                      }))}
-                      style={{ width: '100%', padding: '6px', fontSize: '0.9em', marginBottom: '8px' }}
-                    />
-                    <textarea
-                      value={editData.description || variety.description}
-                      onChange={(e) => setCmsContent(prev => ({
-                        ...prev,
-                        varieties: { ...prev.varieties, [variety.key]: { ...editData, description: e.target.value } }
-                      }))}
-                      style={{ width: '100%', padding: '6px', minHeight: '80px', fontSize: '0.85em', marginBottom: '8px' }}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <h3 className="variety-title">{editData.title || variety.title}</h3>
-                    <p className="variety-tagline">{editData.tagline || variety.tagline}</p>
-                    <p className="variety-description">{editData.description || variety.description}</p>
-                  </>
-                )}
+                <>
+                  <h3 className="variety-title">{variety.title}</h3>
+                  <p className="variety-tagline">{variety.tagline}</p>
+                  <p className="variety-description">{variety.description}</p>
+                </>
                 <ul className="variety-features">
-                  {(editData.features || variety.features).map((feature) => (
+                  {variety.features.map((feature) => (
                     <li key={feature}>{feature}</li>
                   ))}
                 </ul>
@@ -406,42 +221,18 @@ export default function AboutPage() {
           })}
         </div>
 
-        {(cmsContent.mission?.text || cmsContent.vision?.text || shouldShowEditUI) && (
-          <section className="mission-vision-section" style={{ marginTop: '32px', padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-              {(cmsContent.mission?.text || shouldShowEditUI) && (
-                <div>
-                  <h2 style={{ marginBottom: '12px', color: '#6B7D92' }}>Our Mission</h2>
-                  {shouldShowEditUI ? (
-                    <textarea
-                      value={cmsContent.mission?.text || ''}
-                      onChange={(e) => setCmsContent(prev => ({ ...prev, mission: { ...prev.mission, text: e.target.value } }))}
-                      style={{ width: '100%', padding: '8px', minHeight: '100px', fontSize: '1em' }}
-                      placeholder="Enter mission statement..."
-                    />
-                  ) : (
-                    <p style={{ lineHeight: '1.6', color: '#555' }}>{cmsContent.mission?.text}</p>
-                  )}
-                </div>
-              )}
-              {(cmsContent.vision?.text || shouldShowEditUI) && (
-                <div>
-                  <h2 style={{ marginBottom: '12px', color: '#6B7D92' }}>Our Vision</h2>
-                  {shouldShowEditUI ? (
-                    <textarea
-                      value={cmsContent.vision?.text || ''}
-                      onChange={(e) => setCmsContent(prev => ({ ...prev, vision: { ...prev.vision, text: e.target.value } }))}
-                      style={{ width: '100%', padding: '8px', minHeight: '100px', fontSize: '1em' }}
-                      placeholder="Enter vision statement..."
-                    />
-                  ) : (
-                    <p style={{ lineHeight: '1.6', color: '#555' }}>{cmsContent.vision?.text}</p>
-                  )}
-                </div>
-              )}
+        <section className="mission-vision-section" style={{ marginTop: '32px', padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            <div>
+              <h2 style={{ marginBottom: '12px', color: '#6B7D92' }}>Our Mission</h2>
+              <p style={{ lineHeight: '1.6', color: '#555' }}>To cultivate and promote sustainable coffee farming practices in Amadeo Cavite, preserving traditional cultivation methods while embracing modern agricultural innovations.</p>
             </div>
-          </section>
-        )}
+            <div>
+              <h2 style={{ marginBottom: '12px', color: '#6B7D92' }}>Our Vision</h2>
+              <p style={{ lineHeight: '1.6', color: '#555' }}>To position Amadeo Cavite as a premier coffee region known for exceptional quality, sustainability, and heritage-driven agricultural excellence.</p>
+            </div>
+          </div>
+        </section>
 
         <section className="about-articles-section" aria-labelledby="about-articles-heading">
           <h2 id="about-articles-heading" className="about-articles-heading">
@@ -449,67 +240,19 @@ export default function AboutPage() {
           </h2>
           <div className="about-articles-list">
             {aboutArticles.map((article) => {
-              const editData = cmsContent.articles?.[article.key] || {
-                kicker: article.kicker,
-                title: article.title,
-                summary: article.summary,
-                sourceUrl: article.sourceUrl
-              }
-              
               return (
               <article key={article.key} className="about-article-card card">
-                {shouldShowEditUI ? (
-                  <>
-                    <input
-                      type="text"
-                      value={editData.kicker || article.kicker}
-                      onChange={(e) => setCmsContent(prev => ({
-                        ...prev,
-                        articles: { ...prev.articles, [article.key]: { ...editData, kicker: e.target.value } }
-                      }))}
-                      style={{ width: '100%', padding: '6px', fontSize: '0.85em', marginBottom: '8px', color: '#666' }}
-                    />
-                    <input
-                      type="text"
-                      value={editData.title || article.title}
-                      onChange={(e) => setCmsContent(prev => ({
-                        ...prev,
-                        articles: { ...prev.articles, [article.key]: { ...editData, title: e.target.value } }
-                      }))}
-                      style={{ width: '100%', padding: '6px', fontSize: '1.1em', fontWeight: 'bold', marginBottom: '8px' }}
-                    />
-                    <textarea
-                      value={editData.summary || article.summary}
-                      onChange={(e) => setCmsContent(prev => ({
-                        ...prev,
-                        articles: { ...prev.articles, [article.key]: { ...editData, summary: e.target.value } }
-                      }))}
-                      style={{ width: '100%', padding: '6px', minHeight: '70px', fontSize: '0.9em', marginBottom: '8px' }}
-                    />
-                    <input
-                      type="url"
-                      value={editData.sourceUrl || article.sourceUrl}
-                      onChange={(e) => setCmsContent(prev => ({
-                        ...prev,
-                        articles: { ...prev.articles, [article.key]: { ...editData, sourceUrl: e.target.value } }
-                      }))}
-                      style={{ width: '100%', padding: '6px', fontSize: '0.85em' }}
-                      placeholder="Article URL..."
-                    />
-                  </>
-                ) : (
-                  <>
-                    <p className="about-article-kicker">{editData.kicker || article.kicker}</p>
-                    <h3 className="about-article-title">{editData.title || article.title}</h3>
-                    <p className="about-article-text">{editData.summary || article.summary}</p>
-                    <p className="about-article-source">
-                      Source:{' '}
-                      <a href={editData.sourceUrl || article.sourceUrl} target="_blank" rel="noreferrer">
-                        View full article
-                      </a>
-                    </p>
-                  </>
-                )}
+                <>
+                  <p className="about-article-kicker">{article.kicker}</p>
+                  <h3 className="about-article-title">{article.title}</h3>
+                  <p className="about-article-text">{article.summary}</p>
+                  <p className="about-article-source">
+                    Source:{' '}
+                    <a href={article.sourceUrl} target="_blank" rel="noreferrer">
+                      View full article
+                    </a>
+                  </p>
+                </>
               </article>
               )
             })}

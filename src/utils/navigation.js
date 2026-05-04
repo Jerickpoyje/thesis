@@ -4,7 +4,6 @@ const routeMap = {
   'index.html': '/predictive-map',
   'login_register.html': '/login',
   'admin.html': '/admin',
-  'cms.html': '/cms',
   'models.html': '/models',
   'users.html': '/users',
   'reports.html': '/reports',
@@ -18,7 +17,7 @@ const routeMap = {
   'indexpage.jsx': '/predictive-map',
   'loginregisterpage.jsx': '/login',
   'adminpage.jsx': '/admin',
-  'cmspage.jsx': '/cms',
+  
   'modelspage.jsx': '/models',
   'userspage.jsx': '/users',
   'reportspage.jsx': '/reports',
