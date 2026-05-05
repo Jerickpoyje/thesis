@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import '../assets/css/admin-style.css'
 import { toAppRoute } from '../utils/navigation'
+import { setAdminAuthenticated } from '../utils/auth'
 import CoffeePrediction from './CoffeePrediction'
+import Chart from 'chart.js/auto'
 
 const FADE_DURATION_MS = 500
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -20,7 +22,8 @@ const quickLinks = [
 ]
 
 const dataTableLinks = [
-  { label: 'System Logs', href: 'logs.html' },
+  { label: 'Prediction Visualizations', href: 'visualizations.html' },
+  { label: 'Data Generate', href: 'data-generate.html' },
 ]
 
 const settingsLinks = [{ label: 'Return to Home', href: 'home.html?admin=true' }]
@@ -55,6 +58,30 @@ function formatDate(iso) {
   })
 }
 
+function getWeekStartISO(dateValue) {
+  const date = new Date(dateValue)
+  if (Number.isNaN(date.getTime())) return null
+
+  const normalized = new Date(date)
+  normalized.setHours(0, 0, 0, 0)
+  const day = normalized.getDay()
+  const offsetToMonday = day === 0 ? -6 : 1 - day
+  normalized.setDate(normalized.getDate() + offsetToMonday)
+  return normalized.toISOString().slice(0, 10)
+}
+
+function formatWeekLabel(weekStartISO) {
+  if (!weekStartISO) return 'Unknown week'
+  const start = new Date(`${weekStartISO}T00:00:00`)
+  if (Number.isNaN(start.getTime())) return weekStartISO
+
+  const end = new Date(start)
+  end.setDate(start.getDate() + 6)
+  const startPart = start.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
+  const endPart = end.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
+  return `${startPart} - ${endPart}`
+}
+
 export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -73,23 +100,81 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
   const [dashData,    setDashData]    = useState({
     total_runs: 0, total_production: 0, high_confidence: 0, recent_logs: [],
   })
+  const [trendMode, setTrendMode] = useState('overview')
+  const chartCanvasRef = useRef(null)
+  const weeklyChartRef = useRef(null)
 
-  async function fetchDashboard() {
-    setDashLoading(true)
+  const fetchDashboard = useCallback(async (background = false) => {
+    if (!background) setDashLoading(true)
     setDashError(null)
     try {
       const res = await fetch(`${API_BASE}/dashboard`)
       if (!res.ok) throw new Error(`Server error ${res.status}`)
-      setDashData(await res.json())
+      const newData = await res.json()
+      setDashData(newData)
     } catch (e) {
       setDashError(e.message)
     } finally {
-      setDashLoading(false)
+      if (!background) setDashLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchDashboard() }, [])
-  useEffect(() => { if (activeView === ADMIN_VIEWS.DASHBOARD) fetchDashboard() }, [activeView])
+  const weeklyTrendData = useMemo(() => {
+    const weekBucketMap = new Map()
+    const logs = Array.isArray(dashData.recent_logs) ? dashData.recent_logs : []
+
+    logs.forEach((log) => {
+      const weekStartISO = getWeekStartISO(log.created_at)
+      if (!weekStartISO) return
+
+      if (!weekBucketMap.has(weekStartISO)) {
+        weekBucketMap.set(weekStartISO, {
+          weekStartISO,
+          totalProduction: 0,
+          robusta: 0,
+          liberica: 0,
+          excelsa: 0,
+          runCount: 0,
+        })
+      }
+
+      const bucket = weekBucketMap.get(weekStartISO)
+      bucket.totalProduction += Number(log.m2_total_mt ?? 0)
+      bucket.robusta += Number(log.m2_robusta_mt ?? 0)
+      bucket.liberica += Number(log.m2_liberica_mt ?? 0)
+      bucket.excelsa += Number(log.m2_excelsa_mt ?? 0)
+      bucket.runCount += 1
+    })
+
+    const weeklyBuckets = Array.from(weekBucketMap.values()).sort((left, right) => left.weekStartISO.localeCompare(right.weekStartISO))
+
+    return {
+      labels: weeklyBuckets.map((bucket) => formatWeekLabel(bucket.weekStartISO)),
+      totalProduction: weeklyBuckets.map((bucket) => Number(bucket.totalProduction.toFixed(3))),
+      robusta: weeklyBuckets.map((bucket) => Number(bucket.robusta.toFixed(3))),
+      liberica: weeklyBuckets.map((bucket) => Number(bucket.liberica.toFixed(3))),
+      excelsa: weeklyBuckets.map((bucket) => Number(bucket.excelsa.toFixed(3))),
+      runCount: weeklyBuckets.map((bucket) => bucket.runCount),
+      averagePerRun: weeklyBuckets.map((bucket) => Number(((bucket.runCount > 0 ? bucket.totalProduction / bucket.runCount : 0)).toFixed(3))),
+      robustaAveragePerRun: weeklyBuckets.map((bucket) => Number(((bucket.runCount > 0 ? bucket.robusta / bucket.runCount : 0)).toFixed(3))),
+      libericaAveragePerRun: weeklyBuckets.map((bucket) => Number(((bucket.runCount > 0 ? bucket.liberica / bucket.runCount : 0)).toFixed(3))),
+      excelsaAveragePerRun: weeklyBuckets.map((bucket) => Number(((bucket.runCount > 0 ? bucket.excelsa / bucket.runCount : 0)).toFixed(3))),
+    }
+  }, [dashData.recent_logs])
+
+  useEffect(() => { fetchDashboard(false) }, [fetchDashboard])
+  useEffect(() => { if (activeView === ADMIN_VIEWS.DASHBOARD) fetchDashboard(false) }, [activeView, fetchDashboard])
+  useEffect(() => {
+    if (activeView !== ADMIN_VIEWS.DASHBOARD) return
+
+    const intervalId = window.setInterval(() => {
+      fetchDashboard(true)
+    }, 15000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [activeView, fetchDashboard])
   useEffect(() => { setActiveView(initialView) }, [initialView])
   useEffect(() => {
     // Update view based on query parameter
@@ -99,6 +184,249 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
       setActiveView(ADMIN_VIEWS.PREDICTIVE_MAP)
     }
   }, [location.search])
+  useEffect(() => {
+    if (activeView !== ADMIN_VIEWS.DASHBOARD) {
+      if (weeklyChartRef.current) {
+        weeklyChartRef.current.destroy()
+        weeklyChartRef.current = null
+      }
+      return
+    }
+
+    if (!chartCanvasRef.current || weeklyTrendData.labels.length === 0) {
+      if (weeklyChartRef.current) {
+        weeklyChartRef.current.destroy()
+        weeklyChartRef.current = null
+      }
+      return
+    }
+
+    if (weeklyChartRef.current) {
+      weeklyChartRef.current.destroy()
+      weeklyChartRef.current = null
+    }
+
+    const isCoffeeTypeMode = trendMode === 'coffee-types'
+    const isAverageMode = trendMode === 'average-per-run'
+    const datasets = isAverageMode
+      ? [
+          {
+            label: 'Total Avg / Run (MT)',
+            data: weeklyTrendData.averagePerRun,
+            borderColor: '#3f5b74',
+            backgroundColor: 'rgba(63, 91, 116, 0.1)',
+            pointBackgroundColor: '#3f5b74',
+            pointBorderColor: '#fff',
+            pointRadius: 4,
+            borderWidth: 2.8,
+            tension: 0.34,
+            fill: false,
+            yAxisID: 'yProduction',
+          },
+          {
+            label: 'Robusta Avg / Run (MT)',
+            data: weeklyTrendData.robustaAveragePerRun,
+            borderColor: '#6B7D92',
+            backgroundColor: 'rgba(107, 125, 146, 0.08)',
+            pointBackgroundColor: '#6B7D92',
+            pointBorderColor: '#fff',
+            pointRadius: 3.5,
+            borderWidth: 2.2,
+            tension: 0.32,
+            fill: false,
+            yAxisID: 'yProduction',
+          },
+          {
+            label: 'Liberica Avg / Run (MT)',
+            data: weeklyTrendData.libericaAveragePerRun,
+            borderColor: '#A8C5D9',
+            backgroundColor: 'rgba(168, 197, 217, 0.08)',
+            pointBackgroundColor: '#A8C5D9',
+            pointBorderColor: '#fff',
+            pointRadius: 3.5,
+            borderWidth: 2.2,
+            tension: 0.32,
+            fill: false,
+            yAxisID: 'yProduction',
+          },
+          {
+            label: 'Excelsa Avg / Run (MT)',
+            data: weeklyTrendData.excelsaAveragePerRun,
+            borderColor: '#f7b731',
+            backgroundColor: 'rgba(247, 183, 49, 0.08)',
+            pointBackgroundColor: '#f7b731',
+            pointBorderColor: '#fff',
+            pointRadius: 3.5,
+            borderWidth: 2.2,
+            tension: 0.32,
+            fill: false,
+            yAxisID: 'yProduction',
+          },
+        ]
+      : isCoffeeTypeMode
+      ? [
+          {
+            label: 'Robusta (MT)',
+            data: weeklyTrendData.robusta,
+            borderColor: '#6B7D92',
+            backgroundColor: 'rgba(107, 125, 146, 0.08)',
+            pointBackgroundColor: '#6B7D92',
+            pointBorderColor: '#fff',
+            pointRadius: 4,
+            borderWidth: 2.5,
+            tension: 0.32,
+            fill: false,
+            yAxisID: 'yProduction',
+          },
+          {
+            label: 'Liberica (MT)',
+            data: weeklyTrendData.liberica,
+            borderColor: '#A8C5D9',
+            backgroundColor: 'rgba(168, 197, 217, 0.08)',
+            pointBackgroundColor: '#A8C5D9',
+            pointBorderColor: '#fff',
+            pointRadius: 4,
+            borderWidth: 2.5,
+            tension: 0.32,
+            fill: false,
+            yAxisID: 'yProduction',
+          },
+          {
+            label: 'Excelsa (MT)',
+            data: weeklyTrendData.excelsa,
+            borderColor: '#f7b731',
+            backgroundColor: 'rgba(247, 183, 49, 0.08)',
+            pointBackgroundColor: '#f7b731',
+            pointBorderColor: '#fff',
+            pointRadius: 4,
+            borderWidth: 2.5,
+            tension: 0.32,
+            fill: false,
+            yAxisID: 'yProduction',
+          },
+        ]
+      : [
+          {
+            label: 'Total Production (MT)',
+            data: weeklyTrendData.totalProduction,
+            borderColor: '#6B7D92',
+            backgroundColor: 'rgba(107, 125, 146, 0.16)',
+            pointBackgroundColor: '#6B7D92',
+            pointBorderColor: '#fff',
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            borderWidth: 3,
+            tension: 0.35,
+            fill: true,
+            yAxisID: 'yProduction',
+          },
+          {
+            label: 'Prediction Runs',
+            data: weeklyTrendData.runCount,
+            borderColor: '#A8C5D9',
+            backgroundColor: 'rgba(168, 197, 217, 0.08)',
+            pointBackgroundColor: '#A8C5D9',
+            pointBorderColor: '#fff',
+            pointRadius: 3,
+            borderWidth: 2,
+            tension: 0.28,
+            fill: false,
+            yAxisID: 'yRuns',
+          },
+        ]
+
+    weeklyChartRef.current = new Chart(chartCanvasRef.current, {
+      type: 'line',
+      data: {
+        labels: weeklyTrendData.labels,
+        datasets,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 450 },
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              color: '#34465a',
+              usePointStyle: true,
+              padding: 16,
+              font: {
+                family: 'Roboto, sans-serif',
+                weight: 600,
+              },
+            },
+          },
+          tooltip: {
+            backgroundColor: 'rgba(31, 44, 60, 0.96)',
+            titleColor: '#f4f7fb',
+            bodyColor: '#dbe7f2',
+            borderColor: 'rgba(168, 197, 217, 0.35)',
+            borderWidth: 1,
+            padding: 12,
+          },
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: '#5e6e82',
+              font: { family: 'Roboto, sans-serif' },
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.05)',
+            },
+          },
+          yProduction: {
+            beginAtZero: true,
+            position: 'left',
+            title: {
+              display: true,
+              text: 'Production (MT)',
+              color: '#4f6177',
+            },
+            ticks: {
+              color: '#5e6e82',
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.06)',
+            },
+          },
+          ...((isCoffeeTypeMode || isAverageMode)
+            ? {}
+            : {
+                yRuns: {
+                  beginAtZero: true,
+                  position: 'right',
+                  title: {
+                    display: true,
+                    text: 'Prediction Runs',
+                    color: '#7a8ca3',
+                  },
+                  ticks: {
+                    color: '#7a8ca3',
+                    precision: 0,
+                  },
+                  grid: {
+                    drawOnChartArea: false,
+                  },
+                },
+              }),
+        },
+      },
+    })
+
+    return () => {
+      if (weeklyChartRef.current) {
+        weeklyChartRef.current.destroy()
+        weeklyChartRef.current = null
+      }
+    }
+  }, [activeView, trendMode, weeklyTrendData])
   useEffect(() => { return () => { if (timeoutRef.current) window.clearTimeout(timeoutRef.current) } }, [])
 
   const handleSidebarNavigation = (event, href) => {
@@ -125,6 +453,11 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
     event.preventDefault()
     setIsFadingOut(true)
     timeoutRef.current = window.setTimeout(() => navigate(targetRoute + queryParam), FADE_DURATION_MS)
+  }
+
+  const handleLogout = () => {
+    setAdminAuthenticated(false)
+    navigate('/login', { replace: true })
   }
 
   const activeQuickLinkHref = activeView === ADMIN_VIEWS.PREDICTIVE_MAP ? 'Index.html' : 'admin.html'
@@ -159,6 +492,9 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
               <div className="avatar">AD</div>
               <span>Administrator</span>
             </div>
+            <button type="button" className="admin-logout-btn" onClick={handleLogout}>
+              Logout
+            </button>
           </div>
         </div>
 
@@ -172,6 +508,28 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
               {dashData.total_runs > 0
                 ? `Amadeo Coffee Prediction System is live — ${dashData.total_runs} prediction${dashData.total_runs > 1 ? 's' : ''} recorded.`
                 : 'Amadeo Coffee Prediction System is live. Run your first prediction to see data here!'}
+            </div>
+
+            <div className="card grid-item-span-3">
+              <div className="card-header">
+                <h2 className="card-title">EDITOR CONTROLS</h2>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => navigate('/home?edit=true')}
+                  style={{ padding: '10px 18px', borderRadius: '999px', border: 'none', background: '#A8C5D9', color: '#21303f', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  EDIT HOME PAGE
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/about?edit=true')}
+                  style={{ padding: '10px 18px', borderRadius: '999px', border: 'none', background: '#6B7D92', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  EDIT ABOUT PAGE
+                </button>
+              </div>
             </div>
 
             {/* Total Production */}
@@ -204,13 +562,57 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
             {/* Chart */}
             <div className="card grid-item-span-2">
               <div className="card-header">
-                <h2 className="card-title">Weekly Prediction Trends</h2>
+                <div>
+                  <h2 className="card-title">Weekly Prediction Trends</h2>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#6b7d92', fontWeight: 600 }}>
+                    {trendMode === 'overview'
+                      ? 'Totals plus run count by week'
+                      : trendMode === 'coffee-types'
+                        ? 'Weekly totals split by coffee type'
+                        : 'Normalized by weekly run count'}
+                  </p>
+                </div>
+                <div className="weekly-trends-toggle" role="tablist" aria-label="Weekly trend chart mode">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={trendMode === 'overview'}
+                    className={trendMode === 'overview' ? 'active' : ''}
+                    onClick={() => setTrendMode('overview')}
+                  >
+                    Overview
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={trendMode === 'coffee-types'}
+                    className={trendMode === 'coffee-types' ? 'active' : ''}
+                    onClick={() => setTrendMode('coffee-types')}
+                  >
+                    Coffee Types
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={trendMode === 'average-per-run'}
+                    className={trendMode === 'average-per-run' ? 'active' : ''}
+                    onClick={() => setTrendMode('average-per-run')}
+                  >
+                    Avg / Run
+                  </button>
+                </div>
               </div>
-              <div className="chart-placeholder">
-                [Chart Visualization — Coming Soon]
-                <br />
-                <small>Will show prediction history over time</small>
-              </div>
+              {weeklyTrendData.labels.length === 0 ? (
+                <div className="chart-placeholder">
+                  {dashLoading
+                    ? 'Loading weekly trends...'
+                    : 'No prediction data yet. Run predictions to populate weekly trends.'}
+                </div>
+              ) : (
+                <div className="weekly-trends-wrap">
+                  <canvas ref={chartCanvasRef} className="weekly-trends-canvas" aria-label="Weekly prediction trends chart" />
+                </div>
+              )}
             </div>
 
             {/* Model Performance */}

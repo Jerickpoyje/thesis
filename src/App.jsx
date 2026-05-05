@@ -1,26 +1,23 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AboutPage from './components/AboutPage'
 import AdminPage from './components/AdminPage'
+import DataGeneratePage from './components/DataGeneratePage'
 import GeoDataPage from './components/GeoDataPage'
 import HomePage from './components/HomePage'
 import IndexPage from './components/IndexPage'
 import LoginRegisterPage from './components/LoginRegisterPage'
-import LogsPage from './components/LogsPage'
 import ModelsPage from './components/ModelsPage'
 import ProfilePage from './components/ProfilePage'
 import ReportsPage from './components/ReportsPage'
 import SoilTypesPage from './components/SoilTypesPage'
 import UsersPage from './components/UsersPage'
+import VisualizationsPage from './components/VisualizationsPage'
 import { isAdminAuthenticated } from './utils/auth'
 
-function AdminProtectedRoute({ children, showLoginOnSameUrl = false }) {
+function AdminProtectedRoute({ children }) {
   const location = useLocation()
 
   if (!isAdminAuthenticated()) {
-    if (showLoginOnSameUrl) {
-      return <LoginRegisterPage />
-    }
-
     const redirect = encodeURIComponent(`${location.pathname}${location.search}`)
     return <Navigate to={`/login?redirect=${redirect}`} replace />
   }
@@ -32,10 +29,11 @@ export default function App() {
   const location = useLocation()
   
   const isAdminPage = location.pathname.startsWith('/admin') || 
+                      location.pathname.startsWith('/data-generate') ||
                       location.pathname.startsWith('/users') ||
                       location.pathname.startsWith('/reports') ||
                       location.pathname.startsWith('/models') ||
-                      location.pathname.startsWith('/logs') ||
+                      location.pathname.startsWith('/visualizations') ||
                       location.pathname.startsWith('/profile') ||
                       location.pathname.startsWith('/soil-types') ||
                       location.pathname.startsWith('/geo-data')
@@ -60,14 +58,23 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <AdminProtectedRoute showLoginOnSameUrl>
+            <AdminProtectedRoute>
               <AdminPage />
             </AdminProtectedRoute>
           }
         />
         <Route path="/admin.html" element={<Navigate to="/admin" replace />} />
 
-        
+      <Route
+        path="/data-generate"
+        element={
+          <AdminProtectedRoute>
+            <DataGeneratePage />
+          </AdminProtectedRoute>
+        }
+      />
+      <Route path="/data-generate.html" element={<Navigate to="/data-generate" replace />} />
+
       <Route
         path="/models"
         element={
@@ -119,14 +126,16 @@ export default function App() {
       <Route path="/geo-data.html" element={<Navigate to="/geo-data" replace />} />
 
       <Route
-        path="/logs"
+        path="/visualizations"
         element={
           <AdminProtectedRoute>
-            <LogsPage />
+            <VisualizationsPage />
           </AdminProtectedRoute>
         }
       />
-      <Route path="/logs.html" element={<Navigate to="/logs" replace />} />
+      <Route path="/visualizations.html" element={<Navigate to="/visualizations" replace />} />
+      <Route path="/logs" element={<Navigate to="/visualizations" replace />} />
+      <Route path="/logs.html" element={<Navigate to="/visualizations" replace />} />
 
       <Route
         path="/profile"

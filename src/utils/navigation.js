@@ -9,7 +9,8 @@ const routeMap = {
   'reports.html': '/reports',
   'soil-types.html': '/soil-types',
   'geo-data.html': '/geo-data',
-  'logs.html': '/logs',
+  'visualizations.html': '/visualizations',
+  'logs.html': '/visualizations',
   'profile.html': '/profile',
   // Component file mappings
   'homepage.jsx': '/home',
@@ -23,7 +24,8 @@ const routeMap = {
   'reportspage.jsx': '/reports',
   'soiltypespage.jsx': '/soil-types',
   'geodatapage.jsx': '/geo-data',
-  'logspage.jsx': '/logs',
+  'visualizationspage.jsx': '/visualizations',
+  'logspage.jsx': '/visualizations',
   'profilepage.jsx': '/profile',
 }
 

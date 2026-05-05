@@ -14,12 +14,12 @@ const quickLinks = [
 ]
 
 const dataTableLinks = [
-  { label: 'System Logs', href: 'logs.html' },
+  { label: 'Prediction Visualizations', href: 'visualizations.html' },
+  { label: 'Data Generate', href: 'data-generate.html' },
 ]
 
 const settingsLinks = [
-  { label: 'Account Settings', href: 'profile.html' },
-  { label: 'Return to Home', href: 'home.html' },
+  { label: 'Return to Home', href: 'home.html' }
 ]
 
 const MEETING_REQUESTS_KEY = 'fitsMeetingRequests'

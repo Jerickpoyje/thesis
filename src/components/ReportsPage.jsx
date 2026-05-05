@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../assets/css/admin-style.css'
 import { toAppRoute } from '../utils/navigation'
@@ -17,12 +17,12 @@ const quickLinks = [
 ]
 
 const dataTableLinks = [
-  { label: 'System Logs', href: 'logs.html' },
+  { label: 'Prediction Visualizations', href: 'visualizations.html' },
+  { label: 'Data Generate', href: 'data-generate.html' },
 ]
 
 const settingsLinks = [
-  { label: 'Account Settings', href: 'profile.html' },
-  { label: 'Return to Home', href: 'home.html' },
+  { label: 'Return to Home', href: 'home.html' }
 ]
 
 function SidebarSection({ title, links, onNavigate }) {
@@ -46,12 +46,53 @@ function SidebarSection({ title, links, onNavigate }) {
   )
 }
 
+const SORT_OPTIONS = [
+  { value: 'created_at', label: 'Date' },
+  { value: 'barangay_name', label: 'Barangay' },
+  { value: 'm2_total_mt', label: 'Total (MT)' },
+  { value: 'suitability_label', label: 'Prediction Result' },
+  { value: 'confidence', label: 'Confidence' },
+]
+
+function getSortValue(log, field) {
+  switch (field) {
+    case 'created_at':
+      return log.created_at ? new Date(log.created_at).getTime() : 0
+    case 'm2_total_mt':
+      return Number(log.m2_total_mt ?? 0)
+    case 'barangay_name':
+    case 'suitability_label':
+    case 'confidence':
+      return String(log?.[field] ?? '').toLowerCase()
+    default:
+      return String(log?.[field] ?? '').toLowerCase()
+  }
+}
+
+function getRowId(log) {
+  return String(
+    log?.id
+    ?? log?.created_at
+    ?? `${log?.barangay_name ?? 'row'}-${log?.temperature_c ?? 't'}-${log?.humidity_pct ?? 'h'}-${log?.annual_rainfall_mm ?? 'r'}-${log?.m2_total_mt ?? 'm'}`
+  )
+}
+
+function formatDateTime(value) {
+  if (!value) return '-'
+  const dateValue = new Date(value)
+  if (Number.isNaN(dateValue.getTime())) return '-'
+  return dateValue.toLocaleString('en-PH')
+}
+
 export default function ReportsPage() {
   const navigate = useNavigate()
   const [isFadingOut, setIsFadingOut] = useState(false)
   const [predictionLogs, setPredictionLogs] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedFormat, setSelectedFormat] = useState('pdf')
+  const [sortField, setSortField] = useState('created_at')
+  const [sortDirection, setSortDirection] = useState('desc')
+  const [selectedLogIds, setSelectedLogIds] = useState([])
   const timeoutRef = useRef(null)
 
   // Fetch prediction logs from database
@@ -82,6 +123,53 @@ export default function ReportsPage() {
     }
   }, [])
 
+  useEffect(() => {
+    setSelectedLogIds((previousIds) => previousIds.filter((id) => predictionLogs.some((log) => getRowId(log) === id)))
+  }, [predictionLogs])
+
+  const sortedPredictionLogs = useMemo(() => {
+    const nextLogs = [...predictionLogs]
+    nextLogs.sort((left, right) => {
+      const leftValue = getSortValue(left, sortField)
+      const rightValue = getSortValue(right, sortField)
+
+      if (leftValue < rightValue) return sortDirection === 'asc' ? -1 : 1
+      if (leftValue > rightValue) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+    return nextLogs
+  }, [predictionLogs, sortField, sortDirection])
+
+  const selectedPredictionLogs = useMemo(
+    () => sortedPredictionLogs.filter((log) => selectedLogIds.includes(getRowId(log))),
+    [sortedPredictionLogs, selectedLogIds]
+  )
+
+  const hasSelection = selectedPredictionLogs.length > 0
+  const allVisibleSelected = sortedPredictionLogs.length > 0 && selectedPredictionLogs.length === sortedPredictionLogs.length
+
+  const toggleSortDirection = () => {
+    setSortDirection((previous) => (previous === 'asc' ? 'desc' : 'asc'))
+  }
+
+  const toggleRowSelection = (log, index) => {
+    const rowId = getRowId(log, index)
+    setSelectedLogIds((previousIds) => (
+      previousIds.includes(rowId)
+        ? previousIds.filter((id) => id !== rowId)
+        : [...previousIds, rowId]
+    ))
+  }
+
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) {
+      setSelectedLogIds([])
+      return
+    }
+
+    setSelectedLogIds(sortedPredictionLogs.map((log) => getRowId(log)))
+  }
+
   const handleSidebarNavigation = (event, href) => {
     // Extract query parameter if present
     const queryMatch = href?.match(/\?(.+)$/)
@@ -103,8 +191,8 @@ export default function ReportsPage() {
   }
 
   // Export to CSV
-  const exportToCSV = () => {
-    if (!predictionLogs.length) {
+  const exportToCSV = (logsToExport, scopeLabel) => {
+    if (!logsToExport.length) {
       alert('No data to export')
       return
     }
@@ -124,8 +212,8 @@ export default function ReportsPage() {
       'Confidence',
     ]
 
-    const rows = predictionLogs.map((log) => [
-      new Date(log.created_at).toLocaleString('en-PH'),
+    const rows = logsToExport.map((log) => [
+      formatDateTime(log.created_at),
       log.barangay_name || '-',
       log.temperature_c || '-',
       log.humidity_pct || '-',
@@ -156,14 +244,14 @@ export default function ReportsPage() {
   }
 
   // Export to Excel
-  const exportToExcel = () => {
-    if (!predictionLogs.length) {
+  const exportToExcel = (logsToExport, scopeLabel) => {
+    if (!logsToExport.length) {
       alert('No data to export')
       return
     }
 
-    const data = predictionLogs.map((log) => ({
-      Date: new Date(log.created_at).toLocaleString('en-PH'),
+    const data = logsToExport.map((log) => ({
+      Date: formatDateTime(log.created_at),
       Barangay: log.barangay_name || '-',
       'Temp (°C)': log.temperature_c || '-',
       'Humidity (%)': log.humidity_pct || '-',
@@ -201,8 +289,8 @@ export default function ReportsPage() {
   }
 
   // Export to PDF
-  const exportToPDF = () => {
-    if (!predictionLogs.length) {
+  const exportToPDF = (logsToExport, scopeLabel) => {
+    if (!logsToExport.length) {
       alert('No data to export')
       return
     }
@@ -220,7 +308,9 @@ export default function ReportsPage() {
     doc.setFontSize(10)
     yPosition += 10
     doc.text(`Generated: ${new Date().toLocaleString('en-PH')}`, 14, yPosition)
-    doc.text(`Total Records: ${predictionLogs.length}`, pageWidth - 50, yPosition)
+    doc.text(`Total Records: ${logsToExport.length}`, pageWidth - 50, yPosition)
+    yPosition += 6
+    doc.text(`Scope: ${scopeLabel}`, 14, yPosition)
 
     // Table
     yPosition += 15
@@ -238,8 +328,8 @@ export default function ReportsPage() {
       'Suitability',
       'Confidence',
     ]
-    const rows = predictionLogs.map((log) => [
-      new Date(log.created_at).toLocaleDateString('en-PH'),
+    const rows = logsToExport.map((log) => [
+      formatDateTime(log.created_at),
       (log.barangay_name || '-').substring(0, 10),
       log.temperature_c || '-',
       log.humidity_pct || '-',
@@ -283,20 +373,33 @@ export default function ReportsPage() {
     doc.save(`prediction-logs-${new Date().toISOString().split('T')[0]}.pdf`)
   }
 
-  const handleExport = () => {
+  const handleExport = (logsToExport, scopeLabel) => {
+    if (!logsToExport.length) {
+      alert('Select at least one prediction log to export.')
+      return
+    }
+
     switch (selectedFormat) {
       case 'csv':
-        exportToCSV()
+        exportToCSV(logsToExport, scopeLabel)
         break
       case 'excel':
-        exportToExcel()
+        exportToExcel(logsToExport, scopeLabel)
         break
       case 'pdf':
-        exportToPDF()
+        exportToPDF(logsToExport, scopeLabel)
         break
       default:
         break
     }
+  }
+
+  const handleExportSelected = () => {
+    handleExport(selectedPredictionLogs, `Selected Prediction Logs (${selectedPredictionLogs.length})`)
+  }
+
+  const handleExportAll = () => {
+    handleExport(sortedPredictionLogs, `All Prediction Logs (${sortedPredictionLogs.length})`)
   }
 
   return (
@@ -422,9 +525,56 @@ export default function ReportsPage() {
                 </div>
               </div>
 
+              <div className="reports-control-panel">
+                <div className="reports-control-group">
+                  <label className="reports-control-label" htmlFor="reports-sort-field">Sort by</label>
+                  <select
+                    id="reports-sort-field"
+                    className="reports-control-select"
+                    value={sortField}
+                    onChange={(event) => setSortField(event.target.value)}
+                  >
+                    {SORT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="reports-control-group">
+                  <label className="reports-control-label">Order</label>
+                  <button
+                    type="button"
+                    className="reports-sort-direction-btn"
+                    onClick={toggleSortDirection}
+                  >
+                    {sortDirection === 'asc' ? 'Ascending ↑' : 'Descending ↓'}
+                  </button>
+                </div>
+
+                <div className="reports-control-group reports-export-scope-group">
+                  <label className="reports-control-label">Export actions</label>
+                  <div className="reports-scope-toggle reports-export-actions">
+                    <button
+                      type="button"
+                      className="selected"
+                      onClick={handleExportSelected}
+                      disabled={!hasSelection}
+                    >
+                      Export Selected ({selectedPredictionLogs.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExportAll}
+                    >
+                      Export All ({sortedPredictionLogs.length})
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Download Button */}
               <button
-                onClick={handleExport}
+                onClick={handleExportAll}
                 disabled={isLoading}
                 style={{
                   width: '100%',
@@ -446,12 +596,14 @@ export default function ReportsPage() {
                 onMouseEnter={(e) => !isLoading && (e.target.style.transform = 'translateY(-2px)')}
                 onMouseLeave={(e) => !isLoading && (e.target.style.transform = 'translateY(0)')}
               >
-                {isLoading ? '⏳ Loading...' : '⬇️ Download Report'}
+                {isLoading ? '⏳ Loading...' : '⬇️ Download All Report'}
               </button>
 
               {/* Info Box */}
               <div className="report-info-box">
                 📊 <strong>Total Records Available:</strong> {predictionLogs.length} prediction logs ready to export
+                <br />
+                ✅ <strong>Selected:</strong> {selectedPredictionLogs.length} logs
               </div>
             </div>
 
@@ -481,6 +633,14 @@ export default function ReportsPage() {
                   <table className="data-table">
                     <thead>
                       <tr>
+                        <th style={{ width: '48px' }}>
+                          <input
+                            type="checkbox"
+                            checked={allVisibleSelected}
+                            onChange={toggleSelectAll}
+                            aria-label="Select all prediction logs"
+                          />
+                        </th>
                         <th>Date</th>
                         <th>Barangay</th>
                         <th>Temp (°C)</th>
@@ -492,9 +652,20 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {predictionLogs.map((log, idx) => (
-                        <tr key={idx}>
-                          <td>{new Date(log.created_at).toLocaleString('en-PH')}</td>
+                      {sortedPredictionLogs.map((log, idx) => {
+                        const rowId = getRowId(log)
+                        const isChecked = selectedLogIds.includes(rowId)
+                        return (
+                        <tr key={rowId} className={isChecked ? 'reports-row-selected' : undefined}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleRowSelection(log, idx)}
+                              aria-label={`Select prediction log for ${log.barangay_name || 'unknown barangay'} on ${formatDateTime(log.created_at)}`}
+                            />
+                          </td>
+                          <td>{formatDateTime(log.created_at)}</td>
                           <td>{log.barangay_name || '-'}</td>
                           <td>{log.temperature_c || '-'}</td>
                           <td>{log.humidity_pct || '-'}</td>
@@ -505,7 +676,8 @@ export default function ReportsPage() {
                             {log.confidence || '-'}
                           </td>
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>

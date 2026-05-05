@@ -8,13 +8,19 @@ Two predict endpoints:
   POST /predict-public → does NOT save (user/public use)
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
 import joblib
 import pandas as pd
 import numpy as np
 import os
+import re
+import mimetypes
+import uuid
 import requests
 from dotenv import load_dotenv
 
@@ -33,6 +39,121 @@ app.add_middleware(
 # ── Supabase config ───────────────────────────────────────────
 SUPABASE_URL         = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+SUPABASE_MEDIA_BUCKET = os.getenv("SUPABASE_MEDIA_BUCKET", "cms-media")
+
+
+def build_supabase_public_url(bucket: str, object_path: str) -> str:
+    return f"{SUPABASE_URL}/storage/v1/object/public/{bucket}/{object_path}"
+
+
+def get_supabase_auth_headers(content_type: str | None = None) -> dict:
+    headers = {
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+    }
+    if content_type:
+        headers["Content-Type"] = content_type
+    return headers
+
+
+def is_bucket_not_found_response(response: requests.Response) -> bool:
+    if response.status_code == 404:
+        return True
+
+    try:
+        payload = response.json()
+    except Exception:
+        payload = {}
+
+    message = str(payload.get("message", "")).lower()
+    error = str(payload.get("error", "")).lower()
+    code = str(payload.get("statusCode", "")).strip()
+    return (
+        response.status_code == 400
+        and ("bucket not found" in message or "bucket not found" in error or code == "404")
+    )
+
+
+def ensure_supabase_bucket_exists(bucket: str):
+    bucket_url = f"{SUPABASE_URL}/storage/v1/bucket/{bucket}"
+    check_response = requests.get(bucket_url, headers=get_supabase_auth_headers(), timeout=10)
+    if check_response.status_code == 200:
+        return
+
+    if not is_bucket_not_found_response(check_response):
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to check storage bucket '{bucket}': {check_response.status_code} {check_response.text}",
+        )
+
+    create_url = f"{SUPABASE_URL}/storage/v1/bucket"
+    create_response = requests.post(
+        create_url,
+        headers=get_supabase_auth_headers("application/json"),
+        json={
+            "id": bucket,
+            "name": bucket,
+            "public": True,
+        },
+        timeout=10,
+    )
+    if create_response.status_code not in [200, 201, 409]:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to create storage bucket '{bucket}': {create_response.status_code} {create_response.text}",
+        )
+
+
+def upload_supabase_media(file: UploadFile, page: str, section: str):
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        raise HTTPException(status_code=503, detail="Supabase storage is not configured")
+
+    content_type = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
+    if not content_type.startswith(("image/", "video/")):
+        raise HTTPException(status_code=400, detail="Only image and video uploads are supported")
+
+    original_name = os.path.splitext(file.filename or "upload")[0]
+    safe_name = re.sub(r"[^a-zA-Z0-9._-]+", "-", original_name).strip("-_.") or "upload"
+    extension = os.path.splitext(file.filename or "")[1]
+    if not extension:
+        guessed_extension = mimetypes.guess_extension(content_type)
+        extension = guessed_extension or ""
+
+    object_path = f"cms/{page}/{section}/{uuid.uuid4().hex}-{safe_name}{extension}"
+    upload_url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_MEDIA_BUCKET}/{object_path}"
+
+    try:
+        ensure_supabase_bucket_exists(SUPABASE_MEDIA_BUCKET)
+        file_bytes = file.file.read()
+        headers = get_supabase_auth_headers(content_type)
+        headers["x-upsert"] = "true"
+        response = requests.post(upload_url, data=file_bytes, headers=headers, timeout=20)
+        if response.status_code not in [200, 201]:
+            upstream_error = response.text or "Unknown storage error"
+            if response.status_code in [400, 401, 403, 404, 409, 413, 415]:
+                raise HTTPException(status_code=response.status_code, detail=f"Storage upload failed: {upstream_error}")
+            raise HTTPException(status_code=502, detail=f"Storage upload failed: {response.status_code} {upstream_error}")
+
+        return {
+            "publicUrl": build_supabase_public_url(SUPABASE_MEDIA_BUCKET, object_path),
+            "objectPath": object_path,
+            "contentType": content_type,
+        }
+    finally:
+        file.file.close()
+
+
+@app.post("/cms/media/upload")
+async def upload_cms_media(
+    page: str = Form(...),
+    section: str = Form(...),
+    file: UploadFile = File(...),
+):
+    uploaded = upload_supabase_media(file, page, section)
+    return {
+        "status": "success",
+        **uploaded,
+    }
 
 def supabase_insert(table: str, data: dict):
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
@@ -251,6 +372,9 @@ def run_ensemble(data: PredictionInput):
     return combined, total, score, suit, conf
 
 
+
+
+
 METRICS = {
     "robusta":  {"mae": round(0.3428*W1+3.1127*W2,4), "rmse": round(0.3429*W1+5.4507*W2,4), "r2": round(0.7477*W1+0.9837*W2,4), "smape": round(65.33*W1+12.15*W2,2)},
     "liberica": {"mae": round(0.0128*W1+2.1398*W2,4), "rmse": round(0.0130*W1+3.6131*W2,4), "r2": round(0.9288*W1+0.9756*W2,4), "smape": round(165.66*W1+12.15*W2,2)},
@@ -269,6 +393,19 @@ def health():
         "ensemble_weights":  {"model_1": W1, "model_2": W2},
     }
 
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    try:
+        body = await request.body()
+        print("\n=== Request Validation Error ===")
+        print(f"Path: {request.url.path}")
+        print(f"Body: {body.decode('utf-8', errors='replace')}")
+        print(f"Errors: {exc.errors()}")
+    except Exception as e:
+        print(f"⚠ Failed to log request body for validation error: {e}")
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
 @app.get("/barangays")
 def get_barangays():
     return {"barangays": BARANGAYS}
@@ -284,6 +421,108 @@ def get_dashboard():
         "high_confidence":  high_conf,
         "recent_logs":      logs,
     }
+
+
+@app.get("/predictions/over-time")
+def get_predictions_over_time():
+    """Predictions Over Time — count of predictions per day, grouped into time series."""
+    logs = supabase_select("prediction_logs", order="created_at", desc=False, limit=500)
+    
+    # Group by date (YYYY-MM-DD)
+    from collections import defaultdict
+    from datetime import datetime
+    
+    predictions_by_date = defaultdict(int)
+    for log in logs:
+        if log.get("created_at"):
+            try:
+                # Parse ISO format date and extract YYYY-MM-DD
+                date_str = log["created_at"][:10]
+                predictions_by_date[date_str] += 1
+            except Exception:
+                continue
+    
+    # Sort by date
+    sorted_dates = sorted(predictions_by_date.keys())
+    data_points = [
+        {"date": date, "count": predictions_by_date[date]}
+        for date in sorted_dates
+    ]
+    
+    return {
+        "title": "Predictions Over Time",
+        "data": data_points,
+        "total": len(logs),
+    }
+
+
+@app.get("/predictions/by-category")
+def get_predictions_by_category():
+    """Prediction Distribution — count of predictions per coffee category (Robusta, Liberica, Excelsa)."""
+    logs = supabase_select("prediction_logs", limit=500)
+    
+    # Initialize all 3 coffee categories with 0 count to ensure they're always included
+    category_counts = {
+        "Robusta": 0,
+        "Excelsa": 0,
+        "Liberica": 0,
+    }
+    
+    for log in logs:
+        robusta = float(log.get("m2_robusta_mt") or 0)
+        liberica = float(log.get("m2_liberica_mt") or 0)
+        excelsa = float(log.get("m2_excelsa_mt") or 0)
+        
+        # Determine dominant category
+        max_val = max(robusta, liberica, excelsa)
+        if max_val <= 0:
+            continue
+        
+        if robusta == max_val:
+            category_counts["Robusta"] += 1
+        elif liberica == max_val:
+            category_counts["Liberica"] += 1
+        else:
+            category_counts["Excelsa"] += 1
+    
+    # Return categories in a consistent order: Robusta, Excelsa, Liberica
+    data = [
+        {"category": "Robusta", "count": category_counts["Robusta"]},
+        {"category": "Excelsa", "count": category_counts["Excelsa"]},
+        {"category": "Liberica", "count": category_counts["Liberica"]},
+    ]
+    
+    return {
+        "title": "Prediction Distribution by Category",
+        "data": data,
+        "total": len(logs),
+    }
+
+
+@app.get("/predictions/by-location")
+def get_predictions_by_location():
+    """Barangay/Location-Based Predictions — count of predictions grouped by barangay."""
+    logs = supabase_select("prediction_logs", limit=500)
+    
+    from collections import defaultdict
+    
+    location_counts = defaultdict(int)
+    for log in logs:
+        barangay = log.get("barangay_name") or "Unknown"
+        location_counts[barangay] += 1
+    
+    # Sort by count (descending) and then by name
+    data = [
+        {"location": loc, "count": count}
+        for loc, count in sorted(location_counts.items(), key=lambda x: (-x[1], x[0]))
+    ]
+    
+    return {
+        "title": "Predictions by Barangay",
+        "data": data,
+        "total": len(logs),
+    }
+
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(data: PredictionInput):

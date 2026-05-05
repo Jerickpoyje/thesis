@@ -1,129 +1,72 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import '../assets/css/home-style.css'
+import '../assets/css/cms-editor.css'
 import { toAppRoute } from '../utils/navigation'
-import { ADMIN_AUTH_CHANGED_EVENT, isAdminAuthenticated } from '../utils/auth'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
-import robustaImg from '../assets/images/robusta.jpg'
-import libericaImg from '../assets/images/liberica.jpg'
-import excelsaImg from '../assets/images/excelsa.jpg'
+import CmsEditableRegion from './cms/CmsEditableRegion'
+import CmsEditToolbar from './cms/CmsEditToolbar'
+import CmsEditorModal from './cms/CmsEditorModal'
+import { useCmsPageEditor } from './cms/useCmsPageEditor'
+import { ABOUT_CMS_DEFAULTS, ABOUT_CMS_SCHEMAS } from './cms/cmsConfig'
 
 const FADE_DURATION_MS = 500
 
-const varietyCards = [
-  {
-    key: 'robusta',
-    image: robustaImg,
-    imageAlt: 'Robusta coffee variety',
-    title: 'Robusta (Coffea canephora)',
-    tagline: 'The resilient backbone of commercial coffee.',
-    description:
-      'Robusta is the second most popular coffee globally, primarily grown for its superior hardiness and high caffeine content. It thrives in warmer climates and is a vital commercial variety for Cavite farmers. Its flavor profile is typically strong, earthy, and bittersweet, often used in blends or instant coffee to add body and kick.',
-    features: [
-      'Elevation(Meters Above the Sea Level): 600-1200',
-      'Temperature: 13-26°C',
-      'Sunshine Requirements: 50%',
-      'Wind Requirements: Slight',
-      'Relative Humidity(%): 75-85',
-      'Rainfall(mm): 200',
-      'Soil(pH): 5.6-6.5',
-      'Soil Depth(m): 1.5',
-      'Organic Matter(OM): Rich in OM'
-    ],
-  },
-  {
-    key: 'liberica',
-    image: libericaImg,
-    imageAlt: 'Liberica coffee variety',
-    title: 'Liberica (Kapeng Barako)',
-    tagline: 'The national pride with a smoky, intense character.',
-    description:
-      "In the Philippines, Liberica is known as Kapeng Barako due to its strong, bold flavor. It is distinct for its very large, asymmetrical beans and unique smoky, sometimes fruity or floral aroma. Though it accounts for a small percentage of global coffee, it holds immense cultural significance in Cavite and the CALABARZON region.",
-    features: [
-      'Elevation(Meters Above the Sea Level): 600-1000',
-      'Temperature:10-30°C',
-      'Sunshine Requirements: 50%',
-      'Wind Requirements: Slight',
-      'Relative Humidity(%): 70-90',
-      'Rainfall(mm): 150',
-      'Soil(pH): 5.6-6.5',
-      'Soil Depth(m): 1.5',
-      'Organic Matter(OM): Rich in OM'
-    ],
-  },
-  {
-    key: 'excelsa',
-    image: excelsaImg,
-    imageAlt: 'Excelsa coffee variety',
-    title: 'Excelsa (Coffea liberica)',
-    tagline: 'The complex, tart note that adds depth to blends.',
-    description:
-      'Excelsa is often classified as a variety of Liberica but has a unique and complex flavor profile. It provides tart, dark, and lingering notes with hints of fruitiness. It is often used in blends to add body and depth, and it grows well at medium altitudes.',
-    features: [
-      'Elevation(Meters Above the Sea Level): 600-1000',
-      'Temperature:10-30°C',
-      'Sunshine Requirements: 50%',
-      'Wind Requirements: Slight',
-      'Relative Humidity(%): 70-90',
-      'Rainfall(mm): 150',
-      'Soil(pH): 5.6-6.5',
-      'Soil Depth(m): 1.5',
-      'Organic Matter(OM): Rich in OM'
-    ],
-  },
-]
+function renderMedia(media, className, style, isEditMode) {
+  if (!media) return null
 
-const navLinks = [
-  { label: 'Home',         href: 'home.html' },
-  { label: 'About',        href: 'about.html', isActive: true },
-  { label: 'Contact',      href: '#' },
-  { label: '⚡ Predictor', href: 'Index.html' },
-]
+  if (!media.src) {
+    if (!isEditMode) return null
+    return (
+      <div className={className} style={{
+        ...style,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '180px',
+        padding: '20px',
+        border: '1px dashed rgba(255,255,255,0.35)',
+        color: 'rgba(255,255,255,0.8)',
+        textAlign: 'center',
+      }}>
+        Upload an image or video in the CMS editor.
+      </div>
+    )
+  }
 
-const aboutArticles = [
-  {
-    key: 'brewing-hope',
-    kicker: 'Rappler | MovePH',
-    title: 'Brewing hope: How Amadeo farmers cope amid the struggling coffee industry',
-    summary:
-      'A feature on how Amadeo coffee farmers are adapting to climate-related disruptions, aging coffee trees, and unstable farm incomes while rebuilding through cooperative support and local initiatives.',
-    sourceUrl: 'https://www.rappler.com/moveph/brewing-hope-how-amadeo-farmers-cope-amid-the-struggling-coffee-industry/',
-  },
-  {
-    key: 'rise-from-ashes',
-    kicker: 'Rappler | Business',
-    title: 'WATCH: Cavite coffee farmers struggle to rise from the ashes',
-    summary:
-      'A video report on Amadeo farmers after the Taal ashfall, including the long recovery timeline for damaged coffee trees and support needed from government and local partners.',
-    sourceUrl: 'https://www.rappler.com/business/250602-video-cavite-coffee-farmers-struggle-rise-from-ashes/',
-  },
-  {
-    key: 'lost-and-damaged',
-    kicker: 'Rappler | Philippine News',
-    title: 'Lost and damaged: Taal Volcano steals livelihoods',
-    summary:
-      'This report includes accounts from Amadeo, where coffee growers faced severe livelihood losses after the eruption and expected a multi-year period before full farm recovery.',
-    sourceUrl: 'https://www.rappler.com/philippines/249624-lost-damaged-taal-volcano-eruption-january-2020-steals-livelihoods/',
-  },
-  {
-    key: 'ashfall-calabarzon',
-    kicker: 'Rappler | Philippine News',
-    title: 'LOOK: Ashfall from Taal Volcano spreads to Calabarzon, Metro Manila',
-    summary:
-      'A photo report documenting ashfall across Calabarzon, including Cavite, which contextualizes the environmental event that affected coffee communities in the area.',
-    sourceUrl: 'https://www.rappler.com/philippines/249112-photos-ashfall-taal-volcano-january-2020/',
-  },
-]
+  if (media.type === 'video') {
+    return (
+      <video className={className} controls src={media.src} poster={media.poster || undefined} style={style}>
+        {media.alt || 'Video content'}
+      </video>
+    )
+  }
+
+  return <img src={media.src} alt={media.alt || ''} className={className} style={style} />
+}
 
 export default function AboutPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isAdminAuthenticated())
-  const [isFadingOut, setIsFadingOut] = useState(false)
   const timeoutRef = useRef(null)
+  const [isFadingOut, setIsFadingOut] = useState(false)
+
+  const {
+    content,
+    isEditMode,
+    isSaving,
+    saveMessage,
+    saveError,
+    selectedSection,
+    draftSection,
+    setDraftSection,
+    openSectionEditor,
+    closeSectionEditor,
+    saveSectionDraft,
+  } = useCmsPageEditor({
+    pageKey: 'about',
+    defaults: ABOUT_CMS_DEFAULTS,
+    sectionSchemas: ABOUT_CMS_SCHEMAS,
+  })
 
   useEffect(() => {
     return () => {
@@ -131,138 +74,231 @@ export default function AboutPage() {
     }
   }, [])
 
-  useEffect(() => {
-    const syncAuth = () => setIsAdminLoggedIn(isAdminAuthenticated())
-    window.addEventListener(ADMIN_AUTH_CHANGED_EVENT, syncAuth)
-    window.addEventListener('focus', syncAuth)
-    return () => {
-      window.removeEventListener(ADMIN_AUTH_CHANGED_EVENT, syncAuth)
-      window.removeEventListener('focus', syncAuth)
-    }
-  }, [])
-
-  // CRITICAL: User pages must NEVER show edit mode for regular users
-  // But admins CAN edit these pages - only strip ?edit=true if NOT admin
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    if (params.has('edit') && !isAdminLoggedIn) {
-      navigate('/about', { replace: true })
-    }
-  }, [navigate, location.search, isAdminLoggedIn])
-
-
   const navigateWithFade = (event, href) => {
+    if (isEditMode) {
+      event.preventDefault()
+      return
+    }
+
     const targetRoute = toAppRoute(href)
-    if (!targetRoute) { event.preventDefault(); return }
+    if (!targetRoute) {
+      event.preventDefault()
+      return
+    }
+
     event.preventDefault()
     setIsFadingOut(true)
     timeoutRef.current = window.setTimeout(() => navigate(targetRoute), FADE_DURATION_MS)
   }
 
+  const navStyle = content.navigation.style || {}
+  const aboutVarieties = [
+    { key: 'varietyRobusta', className: 'robusta' },
+    { key: 'varietyLiberica', className: 'liberica' },
+    { key: 'varietyExcelsa', className: 'excelsa' },
+  ]
+
+  const aboutArticles = [
+    { key: 'articleBrewingHope' },
+    { key: 'articleRiseFromAshes' },
+    { key: 'articleLostAndDamaged' },
+    { key: 'articleAshfallCalabarzon' },
+  ]
+
+  const endEditMode = () => {
+    closeSectionEditor()
+    navigate(location.pathname, { replace: true })
+  }
+
+  const cancelEditing = () => {
+    closeSectionEditor()
+  }
+
+  const backToAdmin = () => {
+    closeSectionEditor()
+    navigate('/admin')
+  }
 
   return (
     <div className={`coffee-homepage-body about-page-body${isFadingOut ? ' fade-out' : ''}`} style={{}}>
-      {/* Edit mode toolbar removed */}
+      {isEditMode ? (
+        <>
+          <CmsEditToolbar
+            onEndEditMode={endEditMode}
+            onCancelEditing={cancelEditing}
+            onBackToAdmin={backToAdmin}
+            canCancelEditing={Boolean(selectedSection)}
+          />
+          <div style={{
+            position: 'sticky',
+            top: '84px',
+            zIndex: 12000,
+            padding: '12px 18px',
+            background: 'rgba(10, 61, 98, 0.96)',
+            color: '#f0fff5',
+            borderBottom: '1px solid rgba(255,255,255,0.12)',
+            fontSize: '0.95rem',
+          }}>
+            Edit mode is active. Click any section to open the CMS modal.
+          </div>
+        </>
+      ) : null}
 
-      {/* ── Navbar ── */}
-      <div className="top-nav">
+      <CmsEditableRegion as="nav" isEditMode={isEditMode} onEdit={() => openSectionEditor('navigation')} className="top-nav" style={navStyle.container}>
         <div className="logo-container">
           <span className="logo-icon">🌱</span>
           <span className="logo-text">Amadeo Coffee</span>
         </div>
 
-        <nav className="nav-links" aria-label="Main navigation">
-          {navLinks.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              onClick={(event) => {
-                navigateWithFade(event, link.href)
-              }}
-              className={link.isActive ? 'active' : undefined}
-            >
-              {link.label}
-            </a>
-          ))}
-        </nav>
-      </div>
+        <div className="nav-links" aria-label="Main navigation">
+          {content.navigation.links.map((link) => {
+            const isActive = Boolean(link.isActive)
+            return (
+              <a
+                key={link.label}
+                href={link.href}
+                className={isActive ? 'active' : undefined}
+                style={isActive ? navStyle.activeLink : navStyle.link}
+                onClick={(event) => navigateWithFade(event, link.href)}
+              >
+                {link.label}
+              </a>
+            )
+          })}
+        </div>
+      </CmsEditableRegion>
 
       <div className="homepage-layout">
-        <div className="page-hero-header">
-          <h1 className="page-title">
-            The Heart of Amadeo Cavite's Coffee: Our Upland Varieties
-          </h1>
-          <p className="page-subtitle">
-            Exploring the unique characteristics of Robusta, Liberica, and Excelsa, the foundation of the region's rich coffee heritage.
-          </p>
-        </div>
+        <CmsEditableRegion
+          as="section"
+          isEditMode={isEditMode}
+          onEdit={() => openSectionEditor('intro')}
+          className="page-hero-header"
+          style={content.intro.style.section}
+        >
+          <h1 className="page-title" style={content.intro.style.title}>{content.intro.title}</h1>
+          <p className="page-subtitle" style={content.intro.style.subtitle}>{content.intro.subtitle}</p>
+        </CmsEditableRegion>
 
-        <div className="variety-grid">
-          {varietyCards.map((variety) => {
+        <div className="variety-grid" style={content.varietyRobusta.style.section}>
+          {aboutVarieties.map((variety) => {
+            const varietyContent = content[variety.key]
             return (
-            <article key={variety.key} className="variety-card card variety-card-full-info">
-              <div className={`variety-image-placeholder ${variety.key}`}>
-                <img src={variety.image} alt={variety.imageAlt} className={`variety-image-placeholder ${variety.key}`} />
-              </div>
-              <div className="variety-info">
-                <>
-                  <h3 className="variety-title">{variety.title}</h3>
-                  <p className="variety-tagline">{variety.tagline}</p>
-                  <p className="variety-description">{variety.description}</p>
-                </>
-                <ul className="variety-features">
-                  {variety.features.map((feature) => (
-                    <li key={feature}>{feature}</li>
-                  ))}
-                </ul>
-              </div>
-            </article>
+              <CmsEditableRegion
+                as="article"
+                key={variety.key}
+                isEditMode={isEditMode}
+                onEdit={() => openSectionEditor(variety.key)}
+                className="variety-card card variety-card-full-info"
+                style={varietyContent.style.card}
+              >
+                <div className={`variety-image-placeholder ${variety.className}`} style={varietyContent.style.media}>
+                  {renderMedia(varietyContent.media, `variety-image-placeholder ${variety.className}`, varietyContent.style.media, isEditMode)}
+                </div>
+                <div className="variety-info">
+                  <h3 className="variety-title" style={varietyContent.style.title}>{varietyContent.title}</h3>
+                  <p className="variety-tagline" style={varietyContent.style.tagline}>{varietyContent.tagline}</p>
+                  <p className="variety-description" style={varietyContent.style.description}>{varietyContent.description}</p>
+                  <ul className="variety-features" style={varietyContent.style.features}>
+                    {varietyContent.features.map((feature) => (
+                      <li key={feature}>{feature}</li>
+                    ))}
+                  </ul>
+                </div>
+              </CmsEditableRegion>
             )
           })}
         </div>
 
-        <section className="mission-vision-section" style={{ marginTop: '32px', padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+        <section className="mission-vision-section" style={{ marginTop: '32px', padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px', ...content.mission.style.section }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-            <div>
-              <h2 style={{ marginBottom: '12px', color: '#6B7D92' }}>Our Mission</h2>
-              <p style={{ lineHeight: '1.6', color: '#555' }}>To cultivate and promote sustainable coffee farming practices in Amadeo Cavite, preserving traditional cultivation methods while embracing modern agricultural innovations.</p>
-            </div>
-            <div>
-              <h2 style={{ marginBottom: '12px', color: '#6B7D92' }}>Our Vision</h2>
-              <p style={{ lineHeight: '1.6', color: '#555' }}>To position Amadeo Cavite as a premier coffee region known for exceptional quality, sustainability, and heritage-driven agricultural excellence.</p>
-            </div>
+            <CmsEditableRegion
+              as="div"
+              isEditMode={isEditMode}
+              onEdit={() => openSectionEditor('mission')}
+              className="about-mission-card"
+              style={content.mission.style.card}
+            >
+              <h2 style={content.mission.style.title}>{content.mission.title}</h2>
+              <p style={content.mission.style.text}>{content.mission.text}</p>
+            </CmsEditableRegion>
+            <CmsEditableRegion
+              as="div"
+              isEditMode={isEditMode}
+              onEdit={() => openSectionEditor('vision')}
+              className="about-vision-card"
+              style={content.vision.style.card}
+            >
+              <h2 style={content.vision.style.title}>{content.vision.title}</h2>
+              <p style={content.vision.style.text}>{content.vision.text}</p>
+            </CmsEditableRegion>
           </div>
         </section>
 
-        <section className="about-articles-section" aria-labelledby="about-articles-heading">
-          <h2 id="about-articles-heading" className="about-articles-heading">
-            More Articles About Amadeo Coffee
-          </h2>
+        <section className="about-articles-section" style={content.articlesHeading.style.section}>
+          <CmsEditableRegion
+            as="h2"
+            isEditMode={isEditMode}
+            onEdit={() => openSectionEditor('articlesHeading')}
+            id="about-articles-heading"
+            className="about-articles-heading"
+            style={content.articlesHeading.style.title}
+          >
+            {content.articlesHeading.title}
+          </CmsEditableRegion>
           <div className="about-articles-list">
             {aboutArticles.map((article) => {
+              const articleContent = content[article.key]
               return (
-              <article key={article.key} className="about-article-card card">
-                <>
-                  <p className="about-article-kicker">{article.kicker}</p>
-                  <h3 className="about-article-title">{article.title}</h3>
-                  <p className="about-article-text">{article.summary}</p>
-                  <p className="about-article-source">
+                <CmsEditableRegion
+                  as="article"
+                  key={article.key}
+                  isEditMode={isEditMode}
+                  onEdit={() => openSectionEditor(article.key)}
+                  className="about-article-card card"
+                  style={articleContent.style.card}
+                >
+                  <p className="about-article-kicker" style={articleContent.style.kicker}>{articleContent.kicker}</p>
+                  <h3 className="about-article-title" style={articleContent.style.title}>{articleContent.title}</h3>
+                  <p className="about-article-text" style={articleContent.style.summary}>{articleContent.summary}</p>
+                  <p className="about-article-source" style={articleContent.style.source}>
                     Source:{' '}
-                    <a href={article.sourceUrl} target="_blank" rel="noreferrer">
+                    <a href={articleContent.sourceUrl} target="_blank" rel="noreferrer">
                       View full article
                     </a>
                   </p>
-                </>
-              </article>
+                </CmsEditableRegion>
               )
             })}
           </div>
         </section>
       </div>
 
-      <footer className="main-footer">
-        <p>&copy; 2025 Cavite Upland Coffee Analytics. All rights reserved.</p>
+      <footer className="main-footer" style={content.footer.style.footer}>
+        <p style={content.footer.style.text}>{content.footer.text}</p>
       </footer>
+
+      {isEditMode && saveMessage ? (
+        <div style={{ position: 'fixed', right: '18px', bottom: '18px', zIndex: 12001, padding: '12px 14px', borderRadius: '14px', background: '#0f1724', color: '#d7ffe8', boxShadow: '0 18px 45px rgba(0,0,0,0.32)' }}>
+          {saveMessage}
+        </div>
+      ) : null}
+      {isEditMode && saveError ? (
+        <div style={{ position: 'fixed', left: '18px', bottom: '18px', zIndex: 12001, padding: '12px 14px', borderRadius: '14px', background: '#3d1111', color: '#ffd4d4', boxShadow: '0 18px 45px rgba(0,0,0,0.32)' }}>
+          {saveError}
+        </div>
+      ) : null}
+
+      <CmsEditorModal
+        section={selectedSection}
+        draftValue={draftSection}
+        onChange={setDraftSection}
+        onClose={closeSectionEditor}
+        onSave={saveSectionDraft}
+        pageKey="about"
+        isSaving={isSaving}
+        saveError={saveError}
+      />
     </div>
   )
 }

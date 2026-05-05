@@ -143,6 +143,7 @@ export default function CoffeePrediction() {
   const [result,  setResult]  = useState(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState(null)
+  const [clampNote, setClampNote] = useState('')
   const [hovered, setHovered] = useState(null)
   const [tip,     setTip]     = useState({ show: false, x: 0, y: 0 })
 
@@ -161,13 +162,36 @@ export default function CoffeePrediction() {
   async function handlePredict() {
     setLoading(true)
     setError(null)
+    // Client-side validation to match backend schema and avoid 422
+    const validationErrors = []
+    if (inputs.temperature < 15 || inputs.temperature > 35) validationErrors.push('Temperature must be between 15 and 35°C')
+    if (inputs.humidity < 30 || inputs.humidity > 100) validationErrors.push('Humidity must be between 30% and 100%')
+    if (inputs.rainfall < 50 || inputs.rainfall > 2000) validationErrors.push('Annual Rainfall must be between 50 and 2000 mm')
+    if (inputs.year < 2020 || inputs.year > 2035) validationErrors.push('Year must be between 2020 and 2035')
+    if (validationErrors.length > 0) {
+      setError(validationErrors.join('; '))
+      setLoading(false)
+      return
+    }
+
+    // Auto-clamp farm area to backend maximum to avoid 422s from accidental large input
+    if (inputs.area_ha > 500) {
+      setClampNote('Farm area exceeded 500 ha — clamped to 500 ha')
+      setInputs(prev => ({ ...prev, area_ha: 500 }))
+      // clear note after a short time
+      window.setTimeout(() => setClampNote(''), 5000)
+    }
     try {
       const res = await fetch(`${API_BASE}/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(inputs),
       })
-      if (!res.ok) throw new Error(`Server error ${res.status}`)
+      if (!res.ok) {
+        let bodyText = await res.text()
+        try { bodyText = JSON.stringify(JSON.parse(bodyText), null, 2) } catch (e) {}
+        throw new Error(`Server error ${res.status}: ${bodyText}`)
+      }
       setResult(await res.json())
     } catch (e) {
       setError(e.message)
@@ -266,9 +290,14 @@ export default function CoffeePrediction() {
           <button className="cp-predict-btn" onClick={handlePredict} disabled={loading}>
             {loading ? 'Predicting…' : '⚡ Run Prediction'}
           </button>
+          {clampNote && (
+            <div className="cp-clamp-note" style={{ color: '#6b7d92', marginTop: 8, fontWeight: 600 }}>
+              {clampNote}
+            </div>
+          )}
           {error && (
             <div className="cp-error">
-              ⚠ Cannot reach prediction server. Make sure FastAPI backend is running on port 8000.
+              ⚠ {error}
             </div>
           )}
 

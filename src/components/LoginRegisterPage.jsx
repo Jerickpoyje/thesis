@@ -1,47 +1,29 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import '../assets/css/styles.css'
-import '../assets/css/home-style.css'
 import '../assets/css/login-register-page.css'
 import { ADMIN_AUTH_CHANGED_EVENT, isAdminAuthenticated, setAdminAuthenticated } from '../utils/auth'
-
-import bg1 from '../assets/images/bg-1.png'
-import bg2 from '../assets/images/bg-2.png'
-import bg3 from '../assets/images/bg-3.png'
 
 const ADMIN_ACCOUNT = {
   email: 'admin@amadeocoffee.ph',
   password: 'Admin@123',
 }
 
-function SocialLinks() {
-  return (
-    <div className="social-container">
-      <a href="#" className="social" aria-label="Facebook">
-        <span className="social-icon">f</span>
-      </a>
-      <a href="#" className="social" aria-label="Google">
-        <span className="social-icon">G+</span>
-      </a>
-      <a href="#" className="social" aria-label="LinkedIn">
-        <span className="social-icon">in</span>
-      </a>
-    </div>
-  )
-}
-
 export default function LoginRegisterPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isAdminAuthenticated())
   const [loginError, setLoginError] = useState('')
   const [isTermsOpen, setIsTermsOpen] = useState(false)
 
   useEffect(() => {
     const syncAuth = () => {
-      setIsAdminLoggedIn(isAdminAuthenticated())
+      if (!isAdminAuthenticated()) return
+      const searchParams = new URLSearchParams(location.search)
+      const redirectTarget = searchParams.get('redirect')
+      const safeRedirect = redirectTarget && redirectTarget.startsWith('/') ? redirectTarget : '/admin'
+      navigate(safeRedirect, { replace: true })
     }
 
+    syncAuth()
     window.addEventListener(ADMIN_AUTH_CHANGED_EVENT, syncAuth)
     window.addEventListener('focus', syncAuth)
 
@@ -73,59 +55,79 @@ export default function LoginRegisterPage() {
   }
 
   return (
-    <div className="coffee-homepage-body login-page-focused">
-      <div id="slideshow-background">
-        <img src={bg1} alt="Coffee slideshow image 1" className="slideshow-image" />
-        <img src={bg2} alt="Coffee slideshow image 2" className="slideshow-image" />
-        <img src={bg3} alt="Coffee slideshow image 3" className="slideshow-image" />
-      </div>
-
-      <div className="login-page-header">
-        <div className="logo-container">
-          <span className="logo-icon">🌱</span>
-          <span className="logo-text">Amadeo Coffee</span>
+    <div className="auth-page-root">
+      <div className="auth-page-bg" aria-hidden="true" />
+      <header className="auth-page-header">
+        <div className="auth-brand">
+          <span className="auth-brand-icon">🌱</span>
+          <span className="auth-brand-text">Amadeo Coffee</span>
         </div>
-      </div>
+      </header>
 
-      <div className="login-page-wrapper">
-        <div className="container login-only" id="container">
-          <div className="form-container sign-in-container">
-            <form onSubmit={handleLoginSubmit}>
-              <h1>Sign in</h1>
-              <SocialLinks />
-              <span>or use your account</span>
-              <input type="email" placeholder="Email" name="email" required />
-              <input type="password" placeholder="Password" name="password" required />
-              <div className="admin-account-hint">
-                Demo: admin@amadeocoffee.ph / Admin@123
-              </div>
-              {loginError ? <p className="login-error">{loginError}</p> : null}
-              <a href="#">Forgot your password?</a>
-              <button type="submit">Login</button>
-            </form>
-          </div>
+      <main className="auth-page-main">
+        <section className="auth-info-card" aria-label="Platform information">
+          <p className="auth-info-eyebrow">Admin Portal</p>
+          <h1>Coffee Production Analytics</h1>
+          <p>
+            Secure access for prediction monitoring, reports, and content management.
+            Sign in with your administrator credentials.
+          </p>
+          <ul>
+            <li>Live dashboard insights and trend monitoring</li>
+            <li>Prediction logs, reports, and export tools</li>
+            <li>CMS editing controls for homepage and about page</li>
+          </ul>
+        </section>
+
+        <section className="auth-login-card" aria-label="Login form">
+          <form onSubmit={handleLoginSubmit}>
+            <h2>Sign In</h2>
+            <p className="auth-subtitle">Use your administrator account to continue.</p>
+
+            <label htmlFor="email">Email</label>
+            <input id="email" type="email" placeholder="admin@amadeocoffee.ph" name="email" required autoComplete="username" />
+
+            <label htmlFor="password">Password</label>
+            <input id="password" type="password" placeholder="Enter password" name="password" required autoComplete="current-password" />
+
+            <div className="admin-account-hint">
+              Demo account: admin@amadeocoffee.ph / Admin@123
+            </div>
+
+            {loginError ? <p className="login-error">{loginError}</p> : null}
+
+            <button type="submit">Login to Admin</button>
+
+            <button
+              type="button"
+              className="terms-text-button"
+              onClick={() => setIsTermsOpen(true)}
+            >
+              View Terms and Conditions
+            </button>
+          </form>
+        </section>
+      </main>
+
+      {isTermsOpen ? (
+        <div className="terms-modal-backdrop" role="dialog" aria-modal="true" aria-label="Terms and Conditions" onClick={() => setIsTermsOpen(false)}>
+          <section className="terms-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="terms-modal-header">
+              <h2>Terms and Conditions</h2>
+              <button type="button" className="terms-close-button" aria-label="Close Terms and Conditions" onClick={() => setIsTermsOpen(false)}>
+                ×
+              </button>
+            </div>
+            <ul>
+              <li>Use accurate and up-to-date farm information when creating accounts or submitting data.</li>
+              <li>Forecasts are decision-support insights and should be combined with local field validation.</li>
+              <li>User credentials must be kept confidential and should not be shared with unauthorized users.</li>
+              <li>Platform misuse, false data submission, or unauthorized access attempts are prohibited.</li>
+              <li>By using this platform, you agree to responsible, lawful, and ethical usage.</li>
+            </ul>
+          </section>
         </div>
-
-        {isTermsOpen ? (
-          <div className="terms-modal-backdrop" role="dialog" aria-modal="true" aria-label="Terms and Conditions" onClick={() => setIsTermsOpen(false)}>
-            <section className="terms-modal" onClick={(event) => event.stopPropagation()}>
-              <div className="terms-modal-header">
-                <h2>Terms and Conditions</h2>
-                <button type="button" className="terms-close-button" aria-label="Close Terms and Conditions" onClick={() => setIsTermsOpen(false)}>
-                  ×
-                </button>
-              </div>
-              <ul>
-                <li>Use accurate and up-to-date farm information when creating accounts or submitting data.</li>
-                <li>Forecasts are decision-support insights and should be combined with local field validation.</li>
-                <li>User credentials must be kept confidential and should not be shared with unauthorized users.</li>
-                <li>Platform misuse, false data submission, or unauthorized access attempts are prohibited.</li>
-                <li>By using this platform, you agree to responsible, lawful, and ethical usage.</li>
-              </ul>
-            </section>
-          </div>
-        ) : null}
-      </div>
+      ) : null}
     </div>
   )
 }
