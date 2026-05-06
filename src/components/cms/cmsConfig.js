@@ -1,7 +1,7 @@
 const sharedNavLinks = [
   { label: 'Home', href: 'home.html', isActive: true },
   { label: 'About', href: 'about.html' },
-  { label: 'Contact', href: '#' },
+  { label: 'Contact', href: 'contact.html' },
   { label: '⚡ Predictor', href: 'Index.html' },
 ]
 
@@ -123,7 +123,7 @@ export const HOME_CMS_DEFAULTS = {
     },
   },
   footer: {
-    text: '\u00a9 2025 Cavite Upland Coffee Analytics. All rights reserved.',
+    text: '\u00a9 2026 Cavite Upland Coffee Analytics. All rights reserved.',
     style: {
       footer: {},
       text: {},
@@ -540,7 +540,7 @@ export const ABOUT_CMS_DEFAULTS = {
     style: articleCardStyle,
   },
   footer: {
-    text: '\u00a9 2025 Cavite Upland Coffee Analytics. All rights reserved.',
+    text: '\u00a9 2026 Cavite Upland Coffee Analytics. All rights reserved.',
     style: {
       footer: {},
       text: {},
@@ -796,6 +796,97 @@ export const ABOUT_CMS_SCHEMAS = {
       {
         path: 'style.source',
         label: 'Source Styles',
+        keys: ['color', 'fontSize', 'textDecoration'],
+      },
+    ],
+  },
+  footer: HOME_CMS_SCHEMAS.footer,
+}
+
+export const CONTACT_CMS_DEFAULTS = {
+  navigation: {
+    links: sharedNavLinks.map((link) => ({ ...link, isActive: link.label === 'Contact' })),
+    style: {
+      container: {},
+      link: {},
+      activeLink: {},
+    },
+  },
+  header: {
+    title: 'AMADEO FITS CENTER - FARMERS INFORMATION AND TECHNOLOGY SERVICES AND MUNICIPAL AGRICULTURE OFFICE OF AMADEO',
+    style: {
+      section: {},
+      title: {},
+    },
+  },
+  contact: {
+    facebook: 'https://www.facebook.com/FITSAmadeo1',
+    email: 'amadeo.fitscenter2018@gmail.com',
+    phone: '(046) 890 6438',
+    style: {
+      section: {},
+      item: {},
+      label: {},
+      value: {},
+    },
+  },
+  footer: {
+    text: '\u00a9 2026 Cavite Upland Coffee Analytics. All rights reserved.',
+    style: {
+      footer: {},
+      text: {},
+    },
+  },
+}
+
+export const CONTACT_CMS_SCHEMAS = {
+  navigation: HOME_CMS_SCHEMAS.navigation,
+  header: {
+    title: 'Header Section',
+    description: 'Edit the page header title.',
+    fields: [
+      { path: 'title', label: 'Header Title', type: 'text' },
+    ],
+    styleGroups: [
+      {
+        path: 'style.section',
+        label: 'Section Styles',
+        keys: ['padding', 'marginBottom', 'backgroundColor', 'textAlign'],
+      },
+      {
+        path: 'style.title',
+        label: 'Title Styles',
+        keys: ['color', 'fontSize', 'fontWeight', 'lineHeight', 'textAlign'],
+      },
+    ],
+  },
+  contact: {
+    title: 'Contact Information',
+    description: 'Edit the contact details for Amadeo FITS Center.',
+    fields: [
+      { path: 'facebook', label: 'Facebook URL', type: 'text' },
+      { path: 'email', label: 'Email Address', type: 'text' },
+      { path: 'phone', label: 'Phone Number', type: 'text' },
+    ],
+    styleGroups: [
+      {
+        path: 'style.section',
+        label: 'Section Styles',
+        keys: ['padding', 'backgroundColor', 'borderRadius', 'maxWidth', 'margin'],
+      },
+      {
+        path: 'style.item',
+        label: 'Contact Item Styles',
+        keys: ['marginBottom', 'padding', 'borderBottom'],
+      },
+      {
+        path: 'style.label',
+        label: 'Label Styles',
+        keys: ['color', 'fontSize', 'fontWeight', 'display'],
+      },
+      {
+        path: 'style.value',
+        label: 'Value Styles',
         keys: ['color', 'fontSize', 'textDecoration'],
       },
     ],

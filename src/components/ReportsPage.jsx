@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import '../assets/css/admin-style.css'
-import { toAppRoute } from '../utils/navigation'
+import { isSameAppRoute, toAppRoute } from '../utils/navigation'
+import SidebarSection from './SidebarSection'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -24,27 +25,6 @@ const dataTableLinks = [
 const settingsLinks = [
   { label: 'Return to Home', href: 'home.html' }
 ]
-
-function SidebarSection({ title, links, onNavigate }) {
-  return (
-    <>
-      <h4>{title}</h4>
-      <ul>
-        {links.map((link) => (
-          <li key={link.label} className={link.isActive ? 'active' : undefined}>
-            <a
-              href={link.href}
-              className={link.isActive ? 'active' : undefined}
-              onClick={(event) => onNavigate(event, link.href)}
-            >
-              <span>{link.label}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </>
-  )
-}
 
 const SORT_OPTIONS = [
   { value: 'created_at', label: 'Date' },
@@ -86,6 +66,7 @@ function formatDateTime(value) {
 
 export default function ReportsPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [isFadingOut, setIsFadingOut] = useState(false)
   const [predictionLogs, setPredictionLogs] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -93,6 +74,8 @@ export default function ReportsPage() {
   const [sortField, setSortField] = useState('created_at')
   const [sortDirection, setSortDirection] = useState('desc')
   const [selectedLogIds, setSelectedLogIds] = useState([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [logsPerPage] = useState(15)
   const timeoutRef = useRef(null)
 
   // Fetch prediction logs from database
@@ -148,6 +131,16 @@ export default function ReportsPage() {
   const hasSelection = selectedPredictionLogs.length > 0
   const allVisibleSelected = sortedPredictionLogs.length > 0 && selectedPredictionLogs.length === sortedPredictionLogs.length
 
+  // Pagination logic
+  const indexOfLastLog = currentPage * logsPerPage
+  const indexOfFirstLog = indexOfLastLog - logsPerPage
+  const currentLogs = sortedPredictionLogs.slice(indexOfFirstLog, indexOfLastLog)
+  const totalPages = Math.ceil(sortedPredictionLogs.length / logsPerPage)
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber)
+  const nextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages))
+  const prevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1))
+
   const toggleSortDirection = () => {
     setSortDirection((previous) => (previous === 'asc' ? 'desc' : 'asc'))
   }
@@ -178,6 +171,11 @@ export default function ReportsPage() {
     
     const targetRoute = toAppRoute(hrefWithoutQuery)
     if (!targetRoute) {
+      event.preventDefault()
+      return
+    }
+
+    if (isSameAppRoute(location, `${targetRoute}${queryParam}`)) {
       event.preventDefault()
       return
     }
@@ -424,14 +422,6 @@ export default function ReportsPage() {
             <div className="search-bar">
               <input type="text" placeholder="Search..." />
             </div>
-            <div className="top-nav-icons">
-              <span className="icon" aria-hidden="true">
-                🔔
-              </span>
-              <span className="icon" aria-hidden="true">
-                ✉
-              </span>
-            </div>
             <div className="user-profile">
               <div className="avatar">AD</div>
               <span>Administrator</span>
@@ -652,7 +642,7 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedPredictionLogs.map((log, idx) => {
+                      {currentLogs.map((log, idx) => {
                         const rowId = getRowId(log)
                         const isChecked = selectedLogIds.includes(rowId)
                         return (
@@ -680,6 +670,80 @@ export default function ReportsPage() {
                       })}
                     </tbody>
                   </table>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginTop: '16px',
+                      padding: '12px',
+                      borderTop: '1px solid #e8ecf0'
+                    }}>
+                      <button
+                        onClick={prevPage}
+                        disabled={currentPage === 1}
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #d4dce4',
+                          background: currentPage === 1 ? '#f5f7f9' : '#fff',
+                          color: currentPage === 1 ? '#ccc' : '#34465a',
+                          borderRadius: '4px',
+                          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        Previous
+                      </button>
+
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((number) => (
+                        <button
+                          key={number}
+                          onClick={() => paginate(number)}
+                          style={{
+                            padding: '6px 12px',
+                            border: '1px solid #d4dce4',
+                            background: currentPage === number ? '#2d6e18' : '#fff',
+                            color: currentPage === number ? '#fff' : '#34465a',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.875rem',
+                            fontWeight: currentPage === number ? '600' : '400'
+                          }}
+                        >
+                          {number}
+                        </button>
+                      ))}
+
+                      <button
+                        onClick={nextPage}
+                        disabled={currentPage === totalPages}
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #d4dce4',
+                          background: currentPage === totalPages ? '#f5f7f9' : '#fff',
+                          color: currentPage === totalPages ? '#ccc' : '#34465a',
+                          borderRadius: '4px',
+                          cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Page info */}
+                  <div style={{
+                    textAlign: 'center',
+                    marginTop: '8px',
+                    fontSize: '0.75rem',
+                    color: '#7a8b9a'
+                  }}>
+                    Showing {indexOfFirstLog + 1}-{Math.min(indexOfLastLog, sortedPredictionLogs.length)} of {sortedPredictionLogs.length} predictions
+                  </div>
                 </div>
               ) : (
                 <div style={{

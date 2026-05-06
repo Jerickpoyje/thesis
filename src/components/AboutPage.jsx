@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import '../assets/css/home-style.css'
 import '../assets/css/cms-editor.css'
-import { toAppRoute } from '../utils/navigation'
+import { isSameAppRoute, toAppRoute } from '../utils/navigation'
 import CmsEditableRegion from './cms/CmsEditableRegion'
 import CmsEditToolbar from './cms/CmsEditToolbar'
 import CmsEditorModal from './cms/CmsEditorModal'
@@ -82,6 +82,11 @@ export default function AboutPage() {
 
     const targetRoute = toAppRoute(href)
     if (!targetRoute) {
+      event.preventDefault()
+      return
+    }
+
+    if (isSameAppRoute(location, targetRoute)) {
       event.preventDefault()
       return
     }
@@ -209,31 +214,6 @@ export default function AboutPage() {
             )
           })}
         </div>
-
-        <section className="mission-vision-section" style={{ marginTop: '32px', padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px', ...content.mission.style.section }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-            <CmsEditableRegion
-              as="div"
-              isEditMode={isEditMode}
-              onEdit={() => openSectionEditor('mission')}
-              className="about-mission-card"
-              style={content.mission.style.card}
-            >
-              <h2 style={content.mission.style.title}>{content.mission.title}</h2>
-              <p style={content.mission.style.text}>{content.mission.text}</p>
-            </CmsEditableRegion>
-            <CmsEditableRegion
-              as="div"
-              isEditMode={isEditMode}
-              onEdit={() => openSectionEditor('vision')}
-              className="about-vision-card"
-              style={content.vision.style.card}
-            >
-              <h2 style={content.vision.style.title}>{content.vision.title}</h2>
-              <p style={content.vision.style.text}>{content.vision.text}</p>
-            </CmsEditableRegion>
-          </div>
-        </section>
 
         <section className="about-articles-section" style={content.articlesHeading.style.section}>
           <CmsEditableRegion

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Chart from 'chart.js/auto'
 import '../assets/css/admin-style.css'
-import { toAppRoute } from '../utils/navigation'
+import { isSameAppRoute, toAppRoute } from '../utils/navigation'
+import SidebarSection from './SidebarSection'
 
 const FADE_DURATION_MS = 500
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -23,29 +24,9 @@ const settingsLinks = [
   { label: 'Return to Home', href: 'home.html' },
 ]
 
-function SidebarSection({ title, links, onNavigate }) {
-  return (
-    <>
-      <h4>{title}</h4>
-      <ul>
-        {links.map((link) => (
-          <li key={link.label} className={link.isActive ? 'active' : undefined}>
-            <a
-              href={link.href}
-              className={link.isActive ? 'active' : undefined}
-              onClick={(event) => onNavigate(event, link.href)}
-            >
-              <span>{link.label}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </>
-  )
-}
-
 export default function VisualizationsPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [isFadingOut, setIsFadingOut] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -201,6 +182,11 @@ export default function VisualizationsPage() {
       return
     }
 
+    if (isSameAppRoute(location, targetRoute)) {
+      event.preventDefault()
+      return
+    }
+
     event.preventDefault()
     setIsFadingOut(true)
 
@@ -228,14 +214,6 @@ export default function VisualizationsPage() {
         <div className="top-nav">
           <div className="welcome-message">System Prediction Insights</div>
           <div className="top-nav-right">
-            <div className="top-nav-icons">
-              <span className="icon" aria-hidden="true">
-                🔔
-              </span>
-              <span className="icon" aria-hidden="true">
-                ✉
-              </span>
-            </div>
             <div className="model-visualization-badge">PREDICTION DATA</div>
             <div className="user-profile">
               <div className="avatar">AD</div>

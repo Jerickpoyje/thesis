@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import '../assets/css/admin-style.css'
-import { toAppRoute } from '../utils/navigation'
+import { isSameAppRoute, toAppRoute } from '../utils/navigation'
+import SidebarSection from './SidebarSection'
 
 const FADE_DURATION_MS = 500
 
@@ -76,28 +77,9 @@ const dataTableLinks = [
 
 const settingsLinks = [{ label: 'Return to Home', href: 'home.html?admin=true' }]
 
-function SidebarSection({ title, links, onNavigate }) {
-  return (
-    <>
-      <h4>{title}</h4>
-      <ul>
-        {links.map((link) => (
-          <li key={link.label}>
-            <a
-              href={link.href}
-              onClick={(event) => onNavigate(event, link.href)}
-            >
-              <span>{link.label}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </>
-  )
-}
-
 export default function DataGeneratePage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [isFadingOut, setIsFadingOut] = useState(false)
   const timeoutRef = useRef(null)
   const [tableData, setTableData] = useState(defaultTableData)
@@ -106,6 +88,10 @@ export default function DataGeneratePage() {
   const handleSidebarNavigation = (event, href) => {
     const targetRoute = toAppRoute(href)
     if (!targetRoute) {
+      event.preventDefault()
+      return
+    }
+    if (isSameAppRoute(location, targetRoute)) {
       event.preventDefault()
       return
     }
@@ -236,14 +222,6 @@ export default function DataGeneratePage() {
         <div className="top-nav">
           <div className="welcome-message">Agricultural Data Consolidation Tool</div>
           <div className="top-nav-right">
-            <div className="top-nav-icons">
-              <span className="icon" aria-hidden="true">
-                🔔
-              </span>
-              <span className="icon" aria-hidden="true">
-                ✉
-              </span>
-            </div>
             <div className="model-visualization-badge">DATA ENTRY</div>
             <div className="user-profile">
               <div className="avatar">AD</div>

@@ -39,6 +39,17 @@ export function parseCmsValue(value) {
   }
 }
 
+function normalizeFooterText(sectionValue) {
+  if (!isPlainObject(sectionValue) || typeof sectionValue.text !== 'string') {
+    return sectionValue
+  }
+
+  return {
+    ...sectionValue,
+    text: sectionValue.text.replace(/(©\s*)2025(\s+Cavite Upland Coffee Analytics)/, '$12026$2'),
+  }
+}
+
 export function normalizeCmsDocument(defaultDocument, remoteContent) {
   const normalized = {}
   const remoteSections = remoteContent && typeof remoteContent === 'object' ? remoteContent : {}
@@ -54,6 +65,10 @@ export function normalizeCmsDocument(defaultDocument, remoteContent) {
       normalized[sectionKey] = deepClone(parsedValue)
     } else {
       normalized[sectionKey] = deepClone(defaultValue)
+    }
+
+    if (sectionKey === 'footer') {
+      normalized[sectionKey] = normalizeFooterText(normalized[sectionKey])
     }
   }
 

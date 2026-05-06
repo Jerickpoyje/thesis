@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import '../assets/css/stylesss.css'
 import '../assets/css/main.css'
 import '../assets/css/user-predictor.css'
-import { toAppRoute } from '../utils/navigation'
+import { isSameAppRoute, toAppRoute } from '../utils/navigation'
 import { ADMIN_AUTH_CHANGED_EVENT, isAdminAuthenticated } from '../utils/auth'
 import amadeoGeoJSON from './amadeo.json'
 
@@ -192,6 +192,7 @@ export default function IndexPage() {
   const handleNavClick = (event, href) => {
     const targetRoute = toAppRoute(href)
     if (!targetRoute) { event.preventDefault(); return }
+    if (isSameAppRoute(location, targetRoute)) { event.preventDefault(); return }
     event.preventDefault()
     navigate(targetRoute)
   }
@@ -240,7 +241,7 @@ export default function IndexPage() {
       <div className="up-nav">
         <div className="up-nav-logo">
           <span>🌿</span>
-          <span>Coffee Production Analytics</span>
+          <span>Amadeo Coffee</span>
         </div>
         <nav className="up-nav-links">
           <a href="home.html"  onClick={e => handleNavClick(e, 'home.html')}>Home</a>
@@ -413,7 +414,7 @@ export default function IndexPage() {
 
       {/* ── Footer ── */}
       <footer className="up-footer">
-        <p>© 2025 Cavite Upland Coffee Analytics · Amadeo, Cavite</p>
+        <p>© 2026 Cavite Upland Coffee Analytics · Amadeo, Cavite</p>
       </footer>
     </div>
   )

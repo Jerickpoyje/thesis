@@ -659,3 +659,57 @@ Responsive Adjustments
     .about-page-body .about-article-card.card { padding: 20px; }
     .about-page-body .about-articles-list { gap: 14px; }
 }
+
+/* =======================================
+CONTACT PAGE STYLES
+======================================= */
+
+.contact-page-body {
+    background: linear-gradient(135deg, #0d1f0a 0%, #1a3d0f 50%, #0d1f0a 100%);
+}
+
+.contact-section {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.contact-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.contact-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border-left: 4px solid var(--coffee-vibrant-green);
+}
+
+.contact-label {
+    font-weight: 600;
+    color: var(--coffee-vibrant-green);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.contact-item a {
+    color: #f0ede6;
+    text-decoration: none;
+    font-size: 1rem;
+    transition: color 0.2s ease;
+}
+
+.contact-item a:hover {
+    color: var(--coffee-vibrant-green);
+    text-decoration: underline;
+}

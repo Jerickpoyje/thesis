@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AboutPage from './components/AboutPage'
 import AdminPage from './components/AdminPage'
+import ContactPage from './components/ContactPage.jsx'
 import DataGeneratePage from './components/DataGeneratePage'
 import GeoDataPage from './components/GeoDataPage'
 import HomePage from './components/HomePage'
@@ -48,6 +49,9 @@ export default function App() {
 
         <Route path="/about" element={<AboutPage />} />
         <Route path="/about.html" element={<Navigate to="/about" replace />} />
+
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/contact.html" element={<Navigate to="/contact" replace />} />
 
         <Route path="/predictive-map" element={<IndexPage />} />
         <Route path="/index.html" element={<Navigate to="/predictive-map" replace />} />

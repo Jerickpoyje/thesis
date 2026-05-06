@@ -90,10 +90,6 @@ export default function LoginRegisterPage() {
             <label htmlFor="password">Password</label>
             <input id="password" type="password" placeholder="Enter password" name="password" required autoComplete="current-password" />
 
-            <div className="admin-account-hint">
-              Demo account: admin@amadeocoffee.ph / Admin@123
-            </div>
-
             {loginError ? <p className="login-error">{loginError}</p> : null}
 
             <button type="submit">Login to Admin</button>

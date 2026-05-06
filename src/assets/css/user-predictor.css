@@ -19,36 +19,48 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 2rem;
-  background: rgba(0,0,0,0.4);
-  backdrop-filter: blur(10px);
+  background: rgba(10, 30, 10, 0.82);
+  backdrop-filter: blur(16px);
   position: sticky;
   top: 0;
   z-index: 100;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(168, 224, 106, 0.18);
 }
 .up-nav-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #a8e06a;
+  gap: 10px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #dfead9;
 }
 .up-nav-links {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1.75rem;
 }
 .up-nav-links a {
-  font-size: 0.85rem;
-  color: rgba(255,255,255,0.7);
+  font-size: 0.95rem;
+  color: rgba(255,255,255,0.78);
   text-decoration: none;
-  transition: color 0.2s;
+  padding: 6px 0;
+  position: relative;
+  transition: color 0.2s ease;
 }
-.up-nav-links a:hover { color: #fff; }
-.up-nav-active {
-  color: #a8e06a !important;
-  font-weight: 600;
+.up-nav-links a:hover,
+.up-nav-links a.up-nav-active {
+  color: #a8e06a;
+}
+.up-nav-links a.up-nav-active::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 3px;
+  background: #a8e06a;
+  position: absolute;
+  bottom: -5px;
+  left: 0;
+  border-radius: 999px;
 }
 
 /* ── Hero ── */

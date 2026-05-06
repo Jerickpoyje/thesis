@@ -4,7 +4,7 @@ import '../assets/css/styles.css'
 import '../assets/css/home-style.css'
 import '../assets/css/stylesss.css'
 import '../assets/css/cms-editor.css'
-import { toAppRoute } from '../utils/navigation'
+import { isSameAppRoute, toAppRoute } from '../utils/navigation'
 import CmsEditableRegion from './cms/CmsEditableRegion'
 import CmsEditToolbar from './cms/CmsEditToolbar'
 import CmsEditorModal from './cms/CmsEditorModal'
@@ -105,6 +105,11 @@ export default function HomePage() {
 
     const targetRoute = toAppRoute(href)
     if (!targetRoute) {
+      event.preventDefault()
+      return
+    }
+
+    if (isSameAppRoute(location, targetRoute)) {
       event.preventDefault()
       return
     }

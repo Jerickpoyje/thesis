@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import '../assets/css/admin-style.css'
-import { toAppRoute } from '../utils/navigation'
+import { isSameAppRoute, toAppRoute } from '../utils/navigation'
+import SidebarSection from './SidebarSection'
 
 const FADE_DURATION_MS = 500
 
@@ -55,27 +56,6 @@ const modelVersions = [
   },
 ]
 
-function SidebarSection({ title, links, onNavigate }) {
-  return (
-    <>
-      <h4>{title}</h4>
-      <ul>
-        {links.map((link) => (
-          <li key={link.label} className={link.isActive ? 'active' : undefined}>
-            <a
-              href={link.href}
-              className={link.isActive ? 'active' : undefined}
-              onClick={(event) => onNavigate(event, link.href)}
-            >
-              <span>{link.label}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </>
-  )
-}
-
 function ActionIcon({ type }) {
   if (type === 'view') {
     return (
@@ -102,6 +82,7 @@ function ActionIcon({ type }) {
 
 export default function ModelsPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [isFadingOut, setIsFadingOut] = useState(false)
   const timeoutRef = useRef(null)
 
@@ -116,6 +97,11 @@ export default function ModelsPage() {
   const handleSidebarNavigation = (event, href) => {
     const targetRoute = toAppRoute(href)
     if (!targetRoute) {
+      event.preventDefault()
+      return
+    }
+
+    if (isSameAppRoute(location, targetRoute)) {
       event.preventDefault()
       return
     }

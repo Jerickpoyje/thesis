@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import '../assets/css/admin-style.css'
-import { toAppRoute } from '../utils/navigation'
+import { isSameAppRoute, toAppRoute } from '../utils/navigation'
 import { setAdminAuthenticated } from '../utils/auth'
 import CoffeePrediction from './CoffeePrediction'
 import Chart from 'chart.js/auto'
@@ -100,6 +100,8 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
   const [dashData,    setDashData]    = useState({
     total_runs: 0, total_production: 0, high_confidence: 0, recent_logs: [],
   })
+  const [currentPage, setCurrentPage] = useState(1)
+  const [logsPerPage] = useState(10)
   const [trendMode, setTrendMode] = useState('overview')
   const chartCanvasRef = useRef(null)
   const weeklyChartRef = useRef(null)
@@ -112,6 +114,7 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       const newData = await res.json()
       setDashData(newData)
+      if (!background) setCurrentPage(1) // Reset to first page when new data is loaded
     } catch (e) {
       setDashError(e.message)
     } finally {
@@ -161,6 +164,16 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
       excelsaAveragePerRun: weeklyBuckets.map((bucket) => Number(((bucket.runCount > 0 ? bucket.excelsa / bucket.runCount : 0)).toFixed(3))),
     }
   }, [dashData.recent_logs])
+
+  // Pagination logic
+  const indexOfLastLog = currentPage * logsPerPage
+  const indexOfFirstLog = indexOfLastLog - logsPerPage
+  const currentLogs = dashData.recent_logs.slice(indexOfFirstLog, indexOfLastLog)
+  const totalPages = Math.ceil(dashData.recent_logs.length / logsPerPage)
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber)
+  const nextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages))
+  const prevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1))
 
   useEffect(() => { fetchDashboard(false) }, [fetchDashboard])
   useEffect(() => { if (activeView === ADMIN_VIEWS.DASHBOARD) fetchDashboard(false) }, [activeView, fetchDashboard])
@@ -450,6 +463,7 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
     
     const targetRoute = toAppRoute(hrefWithoutQuery)
     if (!targetRoute) { event.preventDefault(); return }
+    if (isSameAppRoute(location, `${targetRoute}${queryParam}`)) { event.preventDefault(); return }
     event.preventDefault()
     setIsFadingOut(true)
     timeoutRef.current = window.setTimeout(() => navigate(targetRoute + queryParam), FADE_DURATION_MS)
@@ -484,10 +498,6 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
           <div className="welcome-message">Welcome back, Admin!</div>
           <div className="top-nav-right">
             <div className="search-bar"><input type="text" placeholder="Search..." /></div>
-            <div className="top-nav-icons">
-              <span className="icon" aria-hidden="true">🔔</span>
-              <span className="icon" aria-hidden="true">✉</span>
-            </div>
             <div className="user-profile">
               <div className="avatar">AD</div>
               <span>Administrator</span>
@@ -663,37 +673,113 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
                   No predictions yet. Run a prediction to see logs here!
                 </p>
               ) : (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Date Run</th>
-                      <th>Barangay</th>
-                      <th>Temp (°C)</th>
-                      <th>Rainfall (mm)</th>
-                      <th>Humidity (%)</th>
-                      <th>Production (MT)</th>
-                      <th>Confidence</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dashData.recent_logs.map((row, i) => (
-                      <tr key={i}>
-                        <td>{formatDate(row.created_at)}</td>
-                        <td>{row.barangay_name}</td>
-                        <td>{row.temperature_c}</td>
-                        <td>{row.annual_rainfall_mm}</td>
-                        <td>{row.humidity_pct}</td>
-                        <td>{row.m2_total_mt?.toFixed(3)}</td>
-                        <td className={
-                          row.confidence === 'High'   ? 'status-high' :
-                          row.confidence === 'Medium' ? 'status-medium' : 'status-low'
-                        }>
-                          {row.confidence}
-                        </td>
+                <>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Date Run</th>
+                        <th>Barangay</th>
+                        <th>Temp (°C)</th>
+                        <th>Rainfall (mm)</th>
+                        <th>Humidity (%)</th>
+                        <th>Production (MT)</th>
+                        <th>Confidence</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {currentLogs.map((row, i) => (
+                        <tr key={i}>
+                          <td>{formatDate(row.created_at)}</td>
+                          <td>{row.barangay_name}</td>
+                          <td>{row.temperature_c}</td>
+                          <td>{row.annual_rainfall_mm}</td>
+                          <td>{row.humidity_pct}</td>
+                          <td>{row.m2_total_mt?.toFixed(3)}</td>
+                          <td className={
+                            row.confidence === 'High'   ? 'status-high' :
+                            row.confidence === 'Medium' ? 'status-medium' : 'status-low'
+                          }>
+                            {row.confidence}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginTop: '16px',
+                      padding: '12px',
+                      borderTop: '1px solid #e8ecf0'
+                    }}>
+                      <button
+                        onClick={prevPage}
+                        disabled={currentPage === 1}
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #d4dce4',
+                          background: currentPage === 1 ? '#f5f7f9' : '#fff',
+                          color: currentPage === 1 ? '#ccc' : '#34465a',
+                          borderRadius: '4px',
+                          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        Previous
+                      </button>
+
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((number) => (
+                        <button
+                          key={number}
+                          onClick={() => paginate(number)}
+                          style={{
+                            padding: '6px 12px',
+                            border: '1px solid #d4dce4',
+                            background: currentPage === number ? '#2d6e18' : '#fff',
+                            color: currentPage === number ? '#fff' : '#34465a',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.875rem',
+                            fontWeight: currentPage === number ? '600' : '400'
+                          }}
+                        >
+                          {number}
+                        </button>
+                      ))}
+
+                      <button
+                        onClick={nextPage}
+                        disabled={currentPage === totalPages}
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #d4dce4',
+                          background: currentPage === totalPages ? '#f5f7f9' : '#fff',
+                          color: currentPage === totalPages ? '#ccc' : '#34465a',
+                          borderRadius: '4px',
+                          cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Page info */}
+                  <div style={{
+                    textAlign: 'center',
+                    marginTop: '8px',
+                    fontSize: '0.75rem',
+                    color: '#7a8b9a'
+                  }}>
+                    Showing {indexOfFirstLog + 1}-{Math.min(indexOfLastLog, dashData.recent_logs.length)} of {dashData.recent_logs.length} predictions
+                  </div>
+                </>
               )}
             </div>
 

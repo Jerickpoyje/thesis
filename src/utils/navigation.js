@@ -57,3 +57,21 @@ export function toAppRoute(href) {
   
   return route
 }
+
+function normalizeRouteValue(value) {
+  if (!value) return ''
+
+  const [basePath, queryString] = String(value)
+    .trim()
+    .replace(/^\/+/, '')
+    .replace(/^\.\//, '')
+    .split('?')
+
+  const normalizedPath = basePath.toLowerCase()
+  return queryString ? `${normalizedPath}?${queryString}` : normalizedPath
+}
+
+export function isSameAppRoute(currentLocation, targetRoute) {
+  const currentRoute = `${currentLocation?.pathname || ''}${currentLocation?.search || ''}`
+  return normalizeRouteValue(currentRoute) === normalizeRouteValue(targetRoute)
+}
