@@ -3,10 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import '../assets/css/login-register-page.css'
 import { ADMIN_AUTH_CHANGED_EVENT, isAdminAuthenticated, setAdminAuthenticated } from '../utils/auth'
 
-const ADMIN_ACCOUNT = {
-  email: 'admin@amadeocoffee.ph',
-  password: 'Admin@123',
-}
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function LoginRegisterPage() {
   const navigate = useNavigate()
@@ -31,27 +28,48 @@ export default function LoginRegisterPage() {
       window.removeEventListener(ADMIN_AUTH_CHANGED_EVENT, syncAuth)
       window.removeEventListener('focus', syncAuth)
     }
-  }, [])
+  }, [location.search, navigate])
 
-  const handleLoginSubmit = (event) => {
+  const handleLoginSubmit = async (event) => {
     event.preventDefault()
 
     const formData = new FormData(event.currentTarget)
     const email = (formData.get('email') || '').toString().trim().toLowerCase()
     const password = (formData.get('password') || '').toString()
 
-    if (email === ADMIN_ACCOUNT.email.toLowerCase() && password === ADMIN_ACCOUNT.password) {
-      setAdminAuthenticated(true)
-      setIsAdminLoggedIn(true)
+    try {
+      const res = await fetch(`${API_BASE}/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const message = body?.detail || 'Invalid username or password.'
+        setLoginError(message)
+        return
+      }
+
+      const body = await res.json().catch(() => ({}))
+      const token = body?.access_token || ''
+
+      if (!token) {
+        setLoginError('Login succeeded but no session token was returned.')
+        return
+      }
+
+      // Successful login
+      setAdminAuthenticated(true, token, email)
       setLoginError('')
       const searchParams = new URLSearchParams(location.search)
       const redirectTarget = searchParams.get('redirect')
       const safeRedirect = redirectTarget && redirectTarget.startsWith('/') ? redirectTarget : '/admin'
       navigate(safeRedirect, { replace: true })
       return
+    } catch {
+      setLoginError('Server error — please try again later.')
     }
-
-    setLoginError('Invalid username or password.')
   }
 
   return (
@@ -85,10 +103,10 @@ export default function LoginRegisterPage() {
             <p className="auth-subtitle">Use your administrator account to continue.</p>
 
             <label htmlFor="email">Email</label>
-            <input id="email" type="email" placeholder="admin@amadeocoffee.ph" name="email" required autoComplete="username" />
+            <input id="email" type="email" placeholder="Enter your admin email" name="email" required autoComplete="username" />
 
             <label htmlFor="password">Password</label>
-            <input id="password" type="password" placeholder="Enter password" name="password" required autoComplete="current-password" />
+            <input id="password" type="password" placeholder="Enter your password" name="password" required autoComplete="current-password" />
 
             {loginError ? <p className="login-error">{loginError}</p> : null}
 

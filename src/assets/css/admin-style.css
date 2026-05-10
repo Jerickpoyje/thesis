@@ -657,6 +657,21 @@ body::-webkit-scrollbar-thumb:hover,
     background-color: #c0392b !important;
 }
 
+.form-error,
+.form-success {
+    margin-top: 8px;
+    font-size: 0.95em;
+    line-height: 1.4;
+}
+
+.form-error {
+    color: #c0392b;
+}
+
+.form-success {
+    color: #1b8b3a;
+}
+
 /* Tertiary Button (Yellow/Orange for Upload/Retrain, uses inline style to differentiate) */
 .card-header .add-button[style*="background-color: #f7b731"] {
     background-color: #f7b731 !important; 

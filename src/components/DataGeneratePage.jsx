@@ -47,18 +47,9 @@ const defaultTableData = [
     id: 1,
     commodity: 'Coffee - Robusta',
     barangay: 'Banaybanay',
-    areaPlanted: 50,
-    areaHarvested: 45,
-    production: 225,
-    notes: '',
-  },
-  {
-    id: 2,
-    commodity: 'Coffee - Excelsa',
-    barangay: 'Bucal',
-    areaPlanted: 30,
-    areaHarvested: 28,
-    production: 140,
+    areaPlanted: 0,
+    areaHarvested: 0,
+    production: 0,
     notes: '',
   },
 ]
@@ -75,7 +66,9 @@ const dataTableLinks = [
   { label: 'Data Generate', href: 'data-generate.html' },
 ]
 
-const settingsLinks = [{ label: 'Return to Home', href: 'home.html?admin=true' }]
+const settingsLinks = [{ label: 'Account Settings', href: 'profile.html' }, { label: 'Return to Home', href: 'home.html?admin=true' }]
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function DataGeneratePage() {
   const navigate = useNavigate()
@@ -84,6 +77,23 @@ export default function DataGeneratePage() {
   const timeoutRef = useRef(null)
   const [tableData, setTableData] = useState(defaultTableData)
   const [nextId, setNextId] = useState(3)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [statusMessage, setStatusMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+
+  const createLocalId = () => `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+  const normalizeServerRow = (row) => ({
+    id: row.id ? `db-${row.id}` : createLocalId(),
+    dbId: row.id,
+    commodity: row.commodity || 'Coffee - Robusta',
+    barangay: row.barangay || 'Banaybanay',
+    areaPlanted: Number(row.area_planted) || 0,
+    areaHarvested: Number(row.area_harvested) || 0,
+    production: Number(row.production) || 0,
+    notes: row.notes || '',
+  })
 
   const handleSidebarNavigation = (event, href) => {
     const targetRoute = toAppRoute(href)
@@ -103,12 +113,111 @@ export default function DataGeneratePage() {
   }
 
   useEffect(() => {
+    loadConsolidatedData()
     return () => {
       if (timeoutRef.current) {
         window.clearTimeout(timeoutRef.current)
       }
     }
   }, [])
+
+  const loadConsolidatedData = async () => {
+    setIsLoading(true)
+    setErrorMessage('')
+    setStatusMessage('Loading consolidated data...')
+
+    try {
+      const response = await fetch(`${API_BASE}/consolidated-data`)
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || data.detail || 'Could not load consolidated data')
+      }
+
+      if (Array.isArray(data.data) && data.data.length > 0) {
+        setTableData(data.data.map(normalizeServerRow))
+        setStatusMessage('Loaded consolidated data from the database.')
+      } else {
+        setTableData(defaultTableData)
+        setStatusMessage('No consolidated data found in the database yet.')
+      }
+    } catch (error) {
+      setErrorMessage(`Unable to load consolidated data. ${error.message}`)
+      setTableData(defaultTableData)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const normalizeToServerPayload = (row) => ({
+    commodity: row.commodity,
+    barangay: row.barangay,
+    area_planted: Number(row.areaPlanted) || 0,
+    area_harvested: Number(row.areaHarvested) || 0,
+    production: Number(row.production) || 0,
+    notes: row.notes || '',
+    dbId: row.dbId || undefined,
+  })
+
+  const handleSaveAll = async () => {
+    setIsSaving(true)
+    setErrorMessage('')
+    setStatusMessage('Saving consolidated data...')
+
+    try {
+      const response = await fetch(`${API_BASE}/consolidated-data/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ rows: tableData.map(normalizeToServerPayload) }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || data.detail || 'Save failed')
+      }
+
+      if (Array.isArray(data.data)) {
+        setTableData(data.data.map(normalizeServerRow))
+        setStatusMessage('Saved consolidated data successfully.')
+      } else {
+        throw new Error('Unexpected save response from server.')
+      }
+    } catch (error) {
+      setErrorMessage(`Save failed. ${error.message}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleDeleteRow = async (id) => {
+    const row = tableData.find((item) => item.id === id)
+    if (!row) {
+      return
+    }
+
+    if (tableData.length === 1) {
+      alert('You must keep at least one row in the table.')
+      return
+    }
+
+    if (row.dbId) {
+      try {
+        const response = await fetch(`${API_BASE}/consolidated-data/${row.dbId}`, {
+          method: 'DELETE',
+        })
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data.message || data.detail || 'Delete failed')
+        }
+      } catch (error) {
+        setErrorMessage(`Delete failed. ${error.message}`)
+        return
+      }
+    }
+
+    setTableData((prevData) => prevData.filter((item) => item.id !== id))
+  }
 
   const handleCellChange = (id, field, value) => {
     setTableData((prevData) =>
@@ -135,14 +244,6 @@ export default function DataGeneratePage() {
     }
     setTableData([...tableData, newRow])
     setNextId(nextId + 1)
-  }
-
-  const handleDeleteRow = (id) => {
-    if (tableData.length === 1) {
-      alert('You must keep at least one row in the table.')
-      return
-    }
-    setTableData(tableData.filter((row) => row.id !== id))
   }
 
   const handleExportCSV = () => {
@@ -207,9 +308,13 @@ export default function DataGeneratePage() {
   return (
     <div className={`admin-dashboard-body${isFadingOut ? ' fade-out' : ''}`}>
       <div className="sidebar">
-        <div className="logo-container">
-          <span className="logo-icon">🌱</span>
-          <span className="logo-text">Data Generation & Consolidation</span>
+        <div className="logo-container" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          <span className="logo-icon" style={{ fontSize: '32px' }}>🌱</span>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span className="logo-text" style={{ fontSize: '20px', fontWeight: '700', color: '#00ff99', lineHeight: '1.2' }}>Coffee</span>
+            <span className="logo-text" style={{ fontSize: '20px', fontWeight: '700', color: '#00ff99', lineHeight: '1.2' }}>Prediction</span>
+            <span className="logo-text" style={{ fontSize: '20px', fontWeight: '700', color: '#00ff99', lineHeight: '1.2' }}>Analysis</span>
+          </div>
         </div>
         <nav className="sidebar-nav" aria-label="Sidebar navigation">
           <SidebarSection title="Quick Links" links={quickLinks} onNavigate={handleSidebarNavigation} />
@@ -232,9 +337,9 @@ export default function DataGeneratePage() {
 
         <div className="dashboard-grid logs-grid">
           <div className="card grid-item-span-3">
-            <div className="card-header">
-              <h2 className="card-title">Coffee Production Data Entry</h2>
-              <p style={{ fontSize: '0.85rem', color: '#7a8b9a', marginTop: '4px' }}>
+            <div className="card-header" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
+              <h2 className="card-title" style={{ margin: 0, fontSize: '1.25rem', fontWeight: '700', color: '#34465a' }}>Coffee Production Data Entry</h2>
+              <p style={{ fontSize: '0.85rem', color: '#7a8b9a', margin: 0 }}>
                 Consolidated agricultural data for reporting and analysis
               </p>
             </div>
@@ -313,7 +418,35 @@ export default function DataGeneratePage() {
               >
                 🖨️ Print
               </button>
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                disabled={isSaving}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: '1px solid #1d4d8a',
+                  background: isSaving ? '#9bb5d7' : '#1d4d8a',
+                  color: '#fff',
+                  fontWeight: 600,
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
+                  fontSize: '0.875rem',
+                }}
+              >
+                {isSaving ? 'Saving...' : 'Save to Database'}
+              </button>
             </div>
+
+            {statusMessage && (
+              <div style={{ padding: '0 16px 12px 16px', color: '#1f4f8b' }}>
+                {statusMessage}
+              </div>
+            )}
+            {errorMessage && (
+              <div style={{ padding: '0 16px 12px 16px', color: '#a72b2b' }}>
+                {errorMessage}
+              </div>
+            )}
 
             {/* Table */}
             <div
@@ -530,6 +663,11 @@ export default function DataGeneratePage() {
                         >
                           Delete
                         </button>
+                        {row.dbId && (
+                          <div style={{ marginTop: '6px', fontSize: '0.7rem', color: '#7a8b9a' }}>
+                            Saved
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}

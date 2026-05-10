@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import '../assets/css/admin-style.css'
 import { isSameAppRoute, toAppRoute } from '../utils/navigation'
-import { setAdminAuthenticated } from '../utils/auth'
+import { getAdminAuthToken, setAdminAuthenticated } from '../utils/auth'
 import CoffeePrediction from './CoffeePrediction'
 import Chart from 'chart.js/auto'
 
@@ -26,24 +26,36 @@ const dataTableLinks = [
   { label: 'Data Generate', href: 'data-generate.html' },
 ]
 
-const settingsLinks = [{ label: 'Return to Home', href: 'home.html?admin=true' }]
+const settingsLinks = [
+  { label: 'Account Settings', href: 'profile.html' },
+  { label: 'Return to Home', href: 'home.html?admin=true' }
+]
 
 function SidebarSection({ title, links, onNavigate, activeHref }) {
+  const location = useLocation()
+
   return (
     <>
       <h4>{title}</h4>
       <ul>
-        {links.map((link) => (
-          <li key={link.label}>
-            <a
-              href={link.href}
-              className={activeHref === link.href ? 'active' : undefined}
-              onClick={(event) => onNavigate(event, link.href)}
-            >
-              <span>{link.label}</span>
-            </a>
-          </li>
-        ))}
+        {links.map((link) => {
+          const isActiveHref = activeHref === link.href
+          const targetRoute = toAppRoute(link.href)
+          const isActiveRoute = targetRoute && isSameAppRoute(location, targetRoute)
+          const isActive = isActiveHref || isActiveRoute
+
+          return (
+            <li key={link.label} className={isActive ? 'active' : undefined}>
+              <a
+                href={link.href}
+                className={isActive ? 'active' : undefined}
+                onClick={(event) => onNavigate(event, link.href)}
+              >
+                <span>{link.label}</span>
+              </a>
+            </li>
+          )
+        })}
       </ul>
     </>
   )

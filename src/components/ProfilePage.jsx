@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import '../assets/css/admin-style.css'
+import { getAdminAuthToken, getAdminAuthEmail } from '../utils/auth'
 import { isSameAppRoute, toAppRoute } from '../utils/navigation'
 import SidebarSection from './SidebarSection'
 
 const FADE_DURATION_MS = 500
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const quickLinks = [
-  { label: 'Predictive Map', href: 'Index.html' },
+  { label: 'Predictive Map', href: 'admin.html?view=map' },
   { label: 'Analytics Dashboard', href: 'admin.html' },
   { label: 'User Requests', href: 'users.html' },
   { label: 'Generate Reports', href: 'reports.html' },
@@ -27,9 +29,46 @@ function ProfilePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [isFadingOut, setIsFadingOut] = useState(false)
+  const [fullName, setFullName] = useState('Administrator')
+  const [email, setEmail] = useState(getAdminAuthEmail() || 'admin@nexus-coffee.ph')
+  const [role, setRole] = useState('System Administrator')
+  const [profileError, setProfileError] = useState('')
+  const [profileSuccess, setProfileSuccess] = useState('')
+  const [currentPass, setCurrentPass] = useState('')
+  const [newPass, setNewPass] = useState('')
+  const [confirmPass, setConfirmPass] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState('')
   const timeoutRef = useRef(null)
 
   useEffect(() => {
+    const loadProfile = async () => {
+      const token = getAdminAuthToken()
+      if (!token) return
+
+      try {
+        const res = await fetch(`${API_BASE}/admin/account/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!res.ok) {
+          return
+        }
+
+        const data = await res.json()
+        const profile = data.profile || {}
+        setFullName(profile.full_name || '')
+        setEmail(profile.email || getAdminAuthEmail())
+        setRole(profile.role || 'System Administrator')
+      } catch {
+        // Ignore — profile page still renders with defaults
+      }
+    }
+
+    loadProfile()
+
     return () => {
       if (timeoutRef.current) {
         window.clearTimeout(timeoutRef.current)
@@ -57,8 +96,94 @@ function ProfilePage() {
     }, FADE_DURATION_MS)
   }
 
-  const handleSubmit = (event) => {
+  const handleProfileSubmit = async (event) => {
     event.preventDefault()
+    setProfileError('')
+    setProfileSuccess('')
+
+    if (!fullName.trim()) {
+      setProfileError('Full name is required.')
+      return
+    }
+
+    const token = getAdminAuthToken()
+    if (!token) {
+      setProfileError('Your session has expired. Please sign in again.')
+      return
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/admin/account/profile`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ full_name: fullName.trim() }),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail || 'Unable to update profile.')
+      }
+
+      setProfileSuccess('Profile updated successfully.')
+    } catch (error) {
+      setProfileError(error.message || 'Unable to update profile.')
+    }
+  }
+
+  const handlePasswordSubmit = async (event) => {
+    event.preventDefault()
+    setPasswordError('')
+    setPasswordSuccess('')
+
+    if (!currentPass || !newPass || !confirmPass) {
+      setPasswordError('Please fill in all password fields.')
+      return
+    }
+
+    if (newPass !== confirmPass) {
+      setPasswordError('New passwords do not match.')
+      return
+    }
+
+    if (newPass.length < 8) {
+      setPasswordError('Password must be at least 8 characters.')
+      return
+    }
+
+    const token = getAdminAuthToken()
+    if (!token) {
+      setPasswordError('Your session has expired. Please sign in again.')
+      return
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/admin/account/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentPassword: currentPass,
+          newPassword: newPass,
+        }),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail || 'Unable to change password.')
+      }
+
+      setPasswordSuccess('Password updated successfully.')
+      setCurrentPass('')
+      setNewPass('')
+      setConfirmPass('')
+    } catch (error) {
+      setPasswordError(error.message || 'Unable to change password.')
+    }
   }
 
   return (
@@ -83,14 +208,6 @@ function ProfilePage() {
             <div className="search-bar">
               <input type="text" placeholder="Search..." />
             </div>
-            <div className="top-nav-icons">
-              <span className="icon" aria-hidden="true">
-                🔔
-              </span>
-              <span className="icon" aria-hidden="true">
-                ✉
-              </span>
-            </div>
             <div className="user-profile">
               <div className="avatar">AD</div>
               <span>Administrator</span>
@@ -104,21 +221,30 @@ function ProfilePage() {
               <h2 className="card-title">Profile Information</h2>
             </div>
 
-            <form className="soil-form" onSubmit={handleSubmit}>
+            <form className="soil-form" onSubmit={handleProfileSubmit}>
               <div className="form-group">
                 <label htmlFor="fullName">Full Name</label>
-                <input type="text" id="fullName" defaultValue="Administrator" required />
+                <input
+                  type="text"
+                  id="fullName"
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  required
+                />
               </div>
 
               <div className="form-group">
                 <label htmlFor="email">Email Address</label>
-                <input type="email" id="email" defaultValue="admin@nexus-coffee.ph" required />
+                <input type="email" id="email" value={email} disabled />
               </div>
 
               <div className="form-group">
                 <label htmlFor="role">System Role</label>
-                <input type="text" id="role" defaultValue="System Administrator" disabled />
+                <input type="text" id="role" value={role} disabled />
               </div>
+
+              {profileError && <p className="form-error">{profileError}</p>}
+              {profileSuccess && <p className="form-success">{profileSuccess}</p>}
 
               <button type="submit" className="submit-btn">
                 Update Profile
@@ -131,21 +257,42 @@ function ProfilePage() {
               <h2 className="card-title">Change Password</h2>
             </div>
 
-            <form className="soil-form" onSubmit={handleSubmit}>
+            <form className="soil-form" onSubmit={handlePasswordSubmit}>
               <div className="form-group">
                 <label htmlFor="currentPass">Current Password</label>
-                <input type="password" id="currentPass" required />
+                <input
+                  type="password"
+                  id="currentPass"
+                  value={currentPass}
+                  onChange={(event) => setCurrentPass(event.target.value)}
+                  required
+                />
               </div>
 
               <div className="form-group">
                 <label htmlFor="newPass">New Password</label>
-                <input type="password" id="newPass" required />
+                <input
+                  type="password"
+                  id="newPass"
+                  value={newPass}
+                  onChange={(event) => setNewPass(event.target.value)}
+                  required
+                />
               </div>
 
               <div className="form-group">
                 <label htmlFor="confirmPass">Confirm New Password</label>
-                <input type="password" id="confirmPass" required />
+                <input
+                  type="password"
+                  id="confirmPass"
+                  value={confirmPass}
+                  onChange={(event) => setConfirmPass(event.target.value)}
+                  required
+                />
               </div>
+
+              {passwordError && <p className="form-error">{passwordError}</p>}
+              {passwordSuccess && <p className="form-success">{passwordSuccess}</p>}
 
               <button type="submit" className="submit-btn" style={{ backgroundColor: '#e74c3c' }}>
                 Change Password

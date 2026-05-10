@@ -23,6 +23,11 @@ import mimetypes
 import uuid
 import requests
 from dotenv import load_dotenv
+import hashlib
+import hmac
+import binascii
+import jwt
+from datetime import datetime, timedelta, timezone
 
 load_dotenv()
 
@@ -30,8 +35,8 @@ app = FastAPI(title="Amadeo Coffee Prediction API", version="3.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=["https://your-vercel-app.vercel.app"],  # Replace with your actual Vercel domain
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -40,6 +45,9 @@ app.add_middleware(
 SUPABASE_URL         = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 SUPABASE_MEDIA_BUCKET = os.getenv("SUPABASE_MEDIA_BUCKET", "cms-media")
+ADMIN_JWT_SECRET = os.getenv("ADMIN_JWT_SECRET")
+ADMIN_JWT_ALGORITHM = os.getenv("ADMIN_JWT_ALGORITHM", "HS256")
+ADMIN_JWT_EXP_MINUTES = int(os.getenv("ADMIN_JWT_EXP_MINUTES", "480"))
 
 
 def build_supabase_public_url(bucket: str, object_path: str) -> str:
@@ -155,24 +163,31 @@ async def upload_cms_media(
         **uploaded,
     }
 
-def supabase_insert(table: str, data: dict):
+def supabase_insert(table: str, data: dict, return_representation: bool = False):
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-        return
+        return None
     try:
         url = f"{SUPABASE_URL}/rest/v1/{table}"
         headers = {
             "apikey":        SUPABASE_SERVICE_KEY,
             "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
             "Content-Type":  "application/json",
-            "Prefer":        "return=minimal",
+            "Prefer":        "return=representation" if return_representation else "return=minimal",
         }
-        res = requests.post(url, json=data, headers=headers, timeout=5)
+        res = requests.post(url, json=data, headers=headers, timeout=10)
         if res.status_code in [200, 201]:
             print(f"✓ Saved to Supabase — {table}")
-        else:
-            print(f"⚠ Supabase insert failed: {res.status_code} {res.text}")
+            if return_representation:
+                try:
+                    return res.json()
+                except Exception:
+                    return None
+            return True
+        print(f"⚠ Supabase insert failed: {res.status_code} {res.text}")
+        return None
     except Exception as e:
         print(f"⚠ Supabase error: {e}")
+        return None
 
 def supabase_select(table: str, order: str = "created_at", desc: bool = True, limit: int = 100):
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
@@ -207,7 +222,7 @@ def supabase_update(table: str, id: str, data: dict):
             "Content-Type":  "application/json",
             "Prefer":        "return=minimal",
         }
-        res = requests.patch(url, json=data, headers=headers, timeout=5)
+        res = requests.patch(url, json=data, headers=headers, timeout=10)
         
         if res.status_code in [200, 204]:
             print(f"✓ Updated {table} (id={id})")
@@ -221,8 +236,225 @@ def supabase_update(table: str, id: str, data: dict):
         print(f"⚠ Supabase update error: {error_msg}")
         return False, error_msg
 
-supabase_ok = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
-print(f"{'✓ Supabase configured' if supabase_ok else '⚠ Supabase not configured'}")
+
+def supabase_delete(table: str, id: str):
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return False, "Supabase not configured"
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/{table}?id=eq.{id}"
+        headers = {
+            "apikey":        SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        }
+        res = requests.delete(url, headers=headers, timeout=10)
+        if res.status_code in [200, 204]:
+            print(f"✓ Deleted {table} (id={id})")
+            return True, "Success"
+        error_msg = f"Status {res.status_code}: {res.text}"
+        print(f"⚠ Supabase delete failed: {error_msg}")
+        return False, error_msg
+    except Exception as e:
+        error_msg = f"Exception: {str(e)}"
+        print(f"⚠ Supabase delete error: {error_msg}")
+        return False, error_msg
+
+
+# ── Admin auth helpers ─────────────────────────────────────────
+def supabase_get_by_email(table: str, email: str):
+    """Fetch a single record from Supabase by email. Returns None or the record."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return None
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/{table}?email=eq.{email}"
+        headers = {
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        }
+        res = requests.get(url, headers=headers, timeout=8)
+        if res.status_code == 200:
+            data = res.json()
+            if isinstance(data, list) and len(data) > 0:
+                return data[0]
+        return None
+    except Exception as e:
+        print(f"⚠ Supabase get_by_email error: {e}")
+        return None
+
+
+def _hash_password(password: str, iterations: int = 100000) -> str:
+    """Return a PBKDF2-SHA256 hash string: pbkdf2_sha256$<iterations>$<salt_hex>$<hash_hex>"""
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, iterations)
+    return f"pbkdf2_sha256${iterations}${binascii.hexlify(salt).decode()}${binascii.hexlify(dk).decode()}"
+
+
+def _verify_password(stored: str, password: str) -> bool:
+    try:
+        parts = stored.split('$')
+        if len(parts) != 4 or not parts[0].startswith('pbkdf2_sha256'):
+            return False
+        iterations = int(parts[1])
+        salt = binascii.unhexlify(parts[2])
+        expected = binascii.unhexlify(parts[3])
+        derived = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, iterations)
+        return hmac.compare_digest(derived, expected)
+    except Exception:
+        return False
+
+
+def _require_admin_jwt_secret():
+    if not ADMIN_JWT_SECRET:
+        raise HTTPException(status_code=503, detail="Admin JWT secret is not configured")
+
+
+def _create_admin_token(email: str) -> str:
+    _require_admin_jwt_secret()
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": email,
+        "role": "admin",
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=ADMIN_JWT_EXP_MINUTES)).timestamp()),
+    }
+    return jwt.encode(payload, ADMIN_JWT_SECRET, algorithm=ADMIN_JWT_ALGORITHM)
+
+
+def _decode_admin_token(token: str) -> dict:
+    _require_admin_jwt_secret()
+    return jwt.decode(token, ADMIN_JWT_SECRET, algorithms=[ADMIN_JWT_ALGORITHM])
+
+
+def _get_admin_email_from_request(request: Request) -> str:
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing admin token")
+
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing admin token")
+
+    try:
+        payload = _decode_admin_token(token)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Admin session expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+    email = str(payload.get("sub") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    return email
+
+
+# ── Admin endpoints ─────────────────────────────────────────────
+@app.post('/admin/login')
+def admin_login(payload: dict):
+    """Authenticate admin using credentials stored in Supabase `admin_accounts` table."""
+    email = (payload.get('email') or '').strip().lower()
+    password = (payload.get('password') or '')
+    if not email or not password:
+        raise HTTPException(status_code=400, detail='Missing email or password')
+
+    record = supabase_get_by_email('admin_accounts', email)
+    if not record:
+        raise HTTPException(status_code=401, detail='Invalid credentials')
+
+    stored_hash = record.get('password_hash') or ''
+    if not stored_hash or not _verify_password(stored_hash, password):
+        raise HTTPException(status_code=401, detail='Invalid credentials')
+
+    token = _create_admin_token(email)
+    return {
+        "status": "ok",
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": ADMIN_JWT_EXP_MINUTES * 60,
+        "admin": {
+            "email": email,
+        },
+    }
+
+
+@app.post('/admin/account/change-password')
+def admin_change_password(request: Request, payload: dict):
+    """Change an admin account password.
+
+    Requires a valid admin JWT in Authorization: Bearer <token>.
+    Expected payload: {"currentPassword": "...", "newPassword": "..."}
+    """
+    email = _get_admin_email_from_request(request)
+    current = (payload.get('currentPassword') or '')
+    new = (payload.get('newPassword') or '')
+    if not current or not new:
+        raise HTTPException(status_code=400, detail='Missing required fields')
+
+    if current == new:
+        raise HTTPException(status_code=400, detail='New password must be different from the current password')
+
+    record = supabase_get_by_email('admin_accounts', email)
+    if not record:
+        raise HTTPException(status_code=404, detail='Admin account not found')
+
+    stored_hash = record.get('password_hash') or ''
+    if not _verify_password(stored_hash, current):
+        raise HTTPException(status_code=401, detail='Current password is incorrect')
+
+    new_hash = _hash_password(new)
+    rec_id = record.get('id')
+    if not rec_id:
+        raise HTTPException(status_code=500, detail='Admin record missing id')
+
+    success, msg = supabase_update('admin_accounts', str(rec_id), {'password_hash': new_hash})
+    if not success:
+        raise HTTPException(status_code=502, detail=f'Failed to update password: {msg}')
+
+    return {"status": "ok"}
+
+@app.get('/admin/account/profile')
+def admin_get_profile(request: Request):
+    """Get the current admin profile from the database."""
+    email = _get_admin_email_from_request(request)
+    record = supabase_get_by_email('admin_accounts', email)
+    if not record:
+        raise HTTPException(status_code=404, detail='Admin account not found')
+
+    return {
+        "status": "ok",
+        "profile": {
+            "email": record.get('email') or email,
+            "full_name": record.get('full_name') or '',
+            "role": record.get('role') or 'System Administrator',
+        },
+    }
+
+@app.patch('/admin/account/profile')
+def admin_update_profile(request: Request, payload: dict):
+    """Update the current admin profile in the database."""
+    email = _get_admin_email_from_request(request)
+    full_name = (payload.get('full_name') or '').strip()
+    if not full_name:
+        raise HTTPException(status_code=400, detail='Full name is required')
+
+    record = supabase_get_by_email('admin_accounts', email)
+    if not record:
+        raise HTTPException(status_code=404, detail='Admin account not found')
+
+    rec_id = record.get('id')
+    if not rec_id:
+        raise HTTPException(status_code=500, detail='Admin record missing id')
+
+    success, msg = supabase_update('admin_accounts', str(rec_id), {'full_name': full_name})
+    if not success:
+        raise HTTPException(status_code=502, detail=f'Failed to update profile: {msg}')
+
+    return {
+        "status": "ok",
+        "profile": {
+            "email": record.get('email') or email,
+            "full_name": full_name,
+            "role": record.get('role') or 'System Administrator',
+        },
+    }
 
 # ── Paths ─────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(__file__)
@@ -522,6 +754,61 @@ def get_predictions_by_location():
         "data": data,
         "total": len(logs),
     }
+
+
+@app.get("/consolidated-data")
+def get_consolidated_data():
+    rows = supabase_select("consolidated_data", order="created_at", desc=False, limit=1000)
+    return {"data": rows}
+
+
+@app.post("/consolidated-data/sync")
+def sync_consolidated_data(payload: dict):
+    rows = payload.get("rows", [])
+    saved_rows = []
+    errors = []
+
+    for row in rows:
+        row_payload = {
+            "commodity":      row.get("commodity", ""),
+            "barangay":       row.get("barangay", ""),
+            "area_planted":   float(row.get("area_planted", 0) or 0),
+            "area_harvested": float(row.get("area_harvested", 0) or 0),
+            "production":     float(row.get("production", 0) or 0),
+            "notes":          str(row.get("notes", "")),
+        }
+        db_id = row.get("dbId") or row.get("id")
+
+        if db_id:
+            success, error_msg = supabase_update("consolidated_data", str(db_id), row_payload)
+            if success:
+                saved_rows.append({"id": db_id, **row_payload})
+            else:
+                errors.append({"row": row, "error": error_msg})
+        else:
+            inserted = supabase_insert("consolidated_data", row_payload, return_representation=True)
+            if inserted:
+                if isinstance(inserted, list) and inserted:
+                    saved_rows.append(inserted[0])
+                elif isinstance(inserted, dict):
+                    saved_rows.append(inserted)
+                else:
+                    errors.append({"row": row, "error": "Insert returned unexpected response"})
+            else:
+                errors.append({"row": row, "error": "Insert failed"})
+
+    result = {"data": saved_rows}
+    if errors:
+        result["errors"] = errors
+    return result
+
+
+@app.delete("/consolidated-data/{row_id}")
+def delete_consolidated_data_row(row_id: str):
+    success, error_msg = supabase_delete("consolidated_data", row_id)
+    if not success:
+        raise HTTPException(status_code=502, detail=f"Failed to delete consolidated_data row: {error_msg}")
+    return {"status": "success", "deleted_id": row_id}
 
 
 @app.post("/predict", response_model=PredictionResponse)
