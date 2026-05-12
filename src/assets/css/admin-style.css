@@ -407,6 +407,17 @@ body::-webkit-scrollbar-thumb:hover,
     border-radius: 5px;
 }
 
+.metric-list {
+    margin: 0;
+    padding-left: 16px;
+    color: var(--nexus-text-dark);
+    font-size: 0.9em;
+}
+
+.metric-list li {
+    margin-bottom: 4px;
+}
+
 /* --- Analytics Chart (Simulated) --- */
 .chart-placeholder {
     height: 150px; 

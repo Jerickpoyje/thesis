@@ -490,6 +490,8 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
 
   // Real ensemble R² based on actual model metrics
   const modelAcc = Math.round(((0.7477 + 0.9288 + 0.8965) * 0.30 + (0.9837 + 0.9756 + 0.9725) * 0.70) / 3 * 100)
+  const highConfidenceRate = dashData.total_runs > 0 ? Math.round((dashData.high_confidence / dashData.total_runs) * 100) : 0
+  const avgProductionPerRun = dashData.total_runs > 0 ? dashData.total_production / dashData.total_runs : 0
 
   return (
     <div className={`admin-dashboard-body${isFadingOut ? ' fade-out' : ''}`}>
@@ -649,15 +651,9 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
                 </div>
               </div>
               <div className="project-status-item">
-                <p>Model 1 — Original Data <span>86%</span></p>
+                <p>High Confidence Predictions <span>{dashLoading ? '...' : `${highConfidenceRate}%`}</span></p>
                 <div className="progress-bar-container">
-                  <div className="progress-bar" style={{ width: '86%', backgroundColor: '#f7b731' }} />
-                </div>
-              </div>
-              <div className="project-status-item">
-                <p>Model 2 — Augmented Data <span>98%</span></p>
-                <div className="progress-bar-container">
-                  <div className="progress-bar" style={{ width: '98%', backgroundColor: '#2ecc71' }} />
+                  <div className="progress-bar" style={{ width: `${highConfidenceRate}%`, backgroundColor: '#2ecc71' }} />
                 </div>
               </div>
             </div>
