@@ -4,7 +4,7 @@ import '../assets/css/styles.css'
 import '../assets/css/home-style.css'
 import '../assets/css/stylesss.css'
 import '../assets/css/cms-editor.css'
-import { isSameAppRoute, toAppRoute } from '../utils/navigation'
+import { getCanonicalPrimaryNavHref, isPrimaryNavLinkActive, isSameAppRoute, toAppRoute } from '../utils/navigation'
 import CmsEditableRegion from './cms/CmsEditableRegion'
 import CmsEditToolbar from './cms/CmsEditToolbar'
 import CmsEditorModal from './cms/CmsEditorModal'
@@ -229,14 +229,15 @@ export default function HomePage() {
 
         <div className="nav-links" aria-label="Main navigation">
           {content.navigation.links.map((link) => {
-            const isActive = Boolean(link.isActive)
+            const href = getCanonicalPrimaryNavHref(link)
+            const isActive = isPrimaryNavLinkActive(location, link)
             return (
               <a
                 key={link.label}
-                href={link.href}
+                href={href}
                 className={isActive ? 'active' : undefined}
                 style={isActive ? navigationStyle.activeLink : navigationStyle.link}
-                onClick={(event) => navigateWithFade(event, link.href)}
+                onClick={(event) => navigateWithFade(event, href)}
               >
                 {link.label}
               </a>

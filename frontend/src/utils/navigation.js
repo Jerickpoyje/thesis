@@ -29,6 +29,13 @@ const routeMap = {
   'profilepage.jsx': '/profile',
 }
 
+const primaryNavRouteMap = {
+  home: '/home',
+  about: '/about',
+  contact: '/contact',
+  predictor: '/predictive-map',
+}
+
 export function toAppRoute(href) {
   if (!href || href === '#') {
     return null
@@ -74,4 +81,22 @@ function normalizeRouteValue(value) {
 export function isSameAppRoute(currentLocation, targetRoute) {
   const currentRoute = `${currentLocation?.pathname || ''}${currentLocation?.search || ''}`
   return normalizeRouteValue(currentRoute) === normalizeRouteValue(targetRoute)
+}
+
+export function getCanonicalPrimaryNavHref(link) {
+  const label = String(link?.label || '')
+    .toLowerCase()
+    .replace(/^⚡\s*/, '')
+    .trim()
+
+  if (primaryNavRouteMap[label]) {
+    return primaryNavRouteMap[label]
+  }
+
+  const resolvedHref = toAppRoute(link?.href)
+  return resolvedHref || link?.href || '#'
+}
+
+export function isPrimaryNavLinkActive(currentLocation, link) {
+  return isSameAppRoute(currentLocation, getCanonicalPrimaryNavHref(link))
 }
