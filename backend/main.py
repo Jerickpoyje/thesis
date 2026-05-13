@@ -45,9 +45,18 @@ def parse_cors_origins() -> list[str]:
     extra_origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
     return default_origins + extra_origins
 
+
+def get_cors_origin_regexes() -> list[str]:
+    raw_patterns = os.getenv("CORS_ORIGIN_REGEXES", "")
+    regexes = [pattern.strip() for pattern in raw_patterns.split(",") if pattern.strip()]
+    if not regexes:
+        regexes = [r"https://.*\.up\.railway\.app"]
+    return regexes
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=parse_cors_origins(),
+    allow_origin_regex="|".join(get_cors_origin_regexes()),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
