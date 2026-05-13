@@ -60,6 +60,7 @@ SUPABASE_MEDIA_BUCKET = os.getenv("SUPABASE_MEDIA_BUCKET", "cms-media")
 ADMIN_JWT_SECRET = os.getenv("ADMIN_JWT_SECRET")
 ADMIN_JWT_ALGORITHM = os.getenv("ADMIN_JWT_ALGORITHM", "HS256")
 ADMIN_JWT_EXP_MINUTES = int(os.getenv("ADMIN_JWT_EXP_MINUTES", "480"))
+supabase_ok = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
 
 
 def build_supabase_public_url(bucket: str, object_path: str) -> str:
