@@ -36,6 +36,23 @@ const primaryNavRouteMap = {
   predictor: '/predictive-map',
 }
 
+const canonicalRouteSet = new Set([
+  '/home',
+  '/about',
+  '/contact',
+  '/predictive-map',
+  '/admin',
+  '/users',
+  '/reports',
+  '/models',
+  '/soil-types',
+  '/geo-data',
+  '/visualizations',
+  '/profile',
+  '/login',
+  '/data-generate',
+])
+
 export function toAppRoute(href) {
   if (!href || href === '#') {
     return null
@@ -46,13 +63,17 @@ export function toAppRoute(href) {
   
   const normalized = basePath.trim().replace(/^\/+/, '').replace(/^\.\//, '').toLowerCase()
   let route = null
+
+  if (canonicalRouteSet.has(`/${normalized}`)) {
+    route = `/${normalized}`
+  }
   
-  if (routeMap[normalized]) {
+  if (!route && routeMap[normalized]) {
     route = routeMap[normalized]
-  } else if (normalized.endsWith('.html')) {
+  } else if (!route && normalized.endsWith('.html')) {
     const name = normalized.replace('.html', '')
     route = `/${name}`
-  } else if (normalized.endsWith('.jsx')) {
+  } else if (!route && normalized.endsWith('.jsx')) {
     const name = normalized.replace('.jsx', '')
     route = `/${name}`
   }
