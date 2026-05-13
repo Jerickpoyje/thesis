@@ -200,15 +200,13 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
       window.clearInterval(intervalId)
     }
   }, [activeView, fetchDashboard])
-  useEffect(() => { setActiveView(initialView) }, [initialView])
   useEffect(() => {
-    // Update view based on query parameter
     const queryParams = new URLSearchParams(location.search)
     const viewParam = queryParams.get('view')
-    if (viewParam === 'map') {
-      setActiveView(ADMIN_VIEWS.PREDICTIVE_MAP)
-    }
-  }, [location.search])
+    const resolvedView = viewParam === 'map' ? ADMIN_VIEWS.PREDICTIVE_MAP : initialView
+    setActiveView(resolvedView)
+  }, [location.search, initialView])
+  useEffect(() => { setIsFadingOut(false) }, [location.pathname, location.search])
   useEffect(() => {
     if (activeView !== ADMIN_VIEWS.DASHBOARD) {
       if (weeklyChartRef.current) {
@@ -456,18 +454,26 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
 
   const handleSidebarNavigation = (event, href) => {
     const normalizedHref = href?.trim().toLowerCase()
-    // Handle admin.html with optional query parameters
-    if (normalizedHref.startsWith('admin.html')) { 
+
+    // Keep dashboard <-> predictive map transitions consistent with other sidebar animations.
+    if (normalizedHref === 'index.html' || normalizedHref.startsWith('admin.html')) {
       event.preventDefault()
-      if (normalizedHref.includes('view=map')) {
-        setActiveView(ADMIN_VIEWS.PREDICTIVE_MAP)
-      } else {
-        setActiveView(ADMIN_VIEWS.DASHBOARD)
-      }
-      return 
+      const nextView = normalizedHref === 'index.html' || normalizedHref.includes('view=map')
+        ? ADMIN_VIEWS.PREDICTIVE_MAP
+        : ADMIN_VIEWS.DASHBOARD
+      const targetRoute = nextView === ADMIN_VIEWS.PREDICTIVE_MAP ? '/admin?view=map' : '/admin'
+
+      if (isSameAppRoute(location, targetRoute) && activeView === nextView) return
+
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
+      setIsFadingOut(true)
+      timeoutRef.current = window.setTimeout(() => {
+        setActiveView(nextView)
+        navigate(targetRoute)
+      }, FADE_DURATION_MS)
+      return
     }
-    if (normalizedHref === 'index.html') { event.preventDefault(); setActiveView(ADMIN_VIEWS.PREDICTIVE_MAP); return }
-    
+
     // Extract query parameter if present
     const queryMatch = href?.match(/\?(.+)$/)
     const queryParam = queryMatch ? '?' + queryMatch[1] : ''
@@ -486,7 +492,7 @@ export default function AdminPage({ initialView = ADMIN_VIEWS.DASHBOARD }) {
     navigate('/login', { replace: true })
   }
 
-  const activeQuickLinkHref = activeView === ADMIN_VIEWS.PREDICTIVE_MAP ? 'Index.html' : 'admin.html'
+  const activeQuickLinkHref = activeView === ADMIN_VIEWS.PREDICTIVE_MAP ? 'admin.html?view=map' : 'admin.html'
 
   // Real ensemble R² based on actual model metrics
   const modelAcc = Math.round(((0.7477 + 0.9288 + 0.8965) * 0.30 + (0.9837 + 0.9756 + 0.9725) * 0.70) / 3 * 100)
