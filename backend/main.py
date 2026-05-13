@@ -33,9 +33,21 @@ load_dotenv()
 
 app = FastAPI(title="Amadeo Coffee Prediction API", version="3.0.0")
 
+
+def parse_cors_origins() -> list[str]:
+    default_origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ]
+    raw_origins = os.getenv("CORS_ORIGINS", "")
+    extra_origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+    return default_origins + extra_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173", "https://your-vercel-app.vercel.app"],
+    allow_origins=parse_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
