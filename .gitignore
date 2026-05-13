@@ -52,3 +52,7 @@ Remove-Item -Recurse -Force frontend\.vite -ErrorAction SilentlyContinue;
 node_modules/
 
 dist/
+
+.vite/
+frontend/.vite/
+
