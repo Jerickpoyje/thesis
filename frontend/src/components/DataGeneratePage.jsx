@@ -66,7 +66,7 @@ const dataTableLinks = [
   { label: 'Data Generate', href: 'data-generate.html' },
 ]
 
-const settingsLinks = [{ label: 'Account Settings', href: 'profile.html' }, { label: 'Return to Home', href: 'home.html?admin=true' }]
+const settingsLinks = [{ label: 'Account Settings', href: 'profile.html' }]
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 

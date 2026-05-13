@@ -24,7 +24,6 @@ const dataTableLinks = [
 
 const settingsLinks = [
   { label: 'Account Settings', href: 'profile.html' },
-  { label: 'Return to Home', href: 'home.html' }
 ]
 
 const SORT_OPTIONS = [
