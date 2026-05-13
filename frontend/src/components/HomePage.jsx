@@ -53,7 +53,17 @@ function renderMedia(media, className, style, isEditMode) {
     )
   }
 
-  return <img src={media.src} alt={media.alt || ''} className={className} style={style} />
+  return (
+    <img
+      src={media.src}
+      alt={media.alt || ''}
+      className={className}
+      style={style}
+      onError={(event) => {
+        event.currentTarget.style.display = 'none'
+      }}
+    />
+  )
 }
 
 export default function HomePage() {

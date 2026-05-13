@@ -158,6 +158,8 @@ function SuitabilityMap({ suits }) {
 export default function IndexPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const timeoutRef = useRef(null)
+  const [isFadingOut, setIsFadingOut] = useState(false)
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isAdminAuthenticated())
 
   const [inputs, setInputs] = useState({
@@ -175,6 +177,7 @@ export default function IndexPage() {
     return () => {
       window.removeEventListener(ADMIN_AUTH_CHANGED_EVENT, sync)
       window.removeEventListener('focus', sync)
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
     }
   }, [])
 
@@ -194,7 +197,9 @@ export default function IndexPage() {
     if (!targetRoute) { event.preventDefault(); return }
     if (isSameAppRoute(location, targetRoute)) { event.preventDefault(); return }
     event.preventDefault()
-    navigate(targetRoute)
+    setIsFadingOut(true)
+    if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
+    timeoutRef.current = window.setTimeout(() => navigate(targetRoute), 300)
   }
 
   function set(key, value) {
@@ -235,7 +240,7 @@ export default function IndexPage() {
     : result?.confidence === 'Medium' ? '#e09a1a' : '#d44444'
 
   return (
-    <div className="up-page">
+    <div className={`up-page${isFadingOut ? ' fade-out' : ''}`}>
 
       {/* ── Navbar ── */}
       <div className="up-nav">
@@ -246,7 +251,7 @@ export default function IndexPage() {
         <nav className="up-nav-links">
           <a href="home.html"  onClick={e => handleNavClick(e, 'home.html')}>Home</a>
           <a href="about.html" onClick={e => handleNavClick(e, 'about.html')}>About</a>
-          <a href="#"          onClick={e => e.preventDefault()}>Contact</a>
+          <a href="contact.html" onClick={e => handleNavClick(e, 'contact.html')}>Contact</a>
           <a href="Index.html" className="up-nav-active" onClick={e => handleNavClick(e, 'Index.html')}>Predictor</a>
         </nav>
       </div>

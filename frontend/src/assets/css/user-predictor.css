@@ -13,6 +13,12 @@
   flex-direction: column;
 }
 
+.up-page.fade-out {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-in-out;
+}
+
 /* ── Navbar ── */
 .up-nav {
   display: flex;
