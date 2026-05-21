@@ -11,6 +11,139 @@ import CmsEditorModal from './cms/CmsEditorModal'
 import { useCmsPageEditor } from './cms/useCmsPageEditor'
 import { HOME_CMS_DEFAULTS, HOME_CMS_SCHEMAS } from './cms/cmsConfig'
 
+// Inline OTPModal to avoid import resolution issues during dev
+function OTPModal({ open, email, name, onClose, onVerified }) {
+  const [digits, setDigits] = useState(['', '', '', '', '', ''])
+  const inputsRef = useRef([])
+  const [error, setError] = useState('')
+  const [status, setStatus] = useState('idle')
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const resendTimerRef = useRef(null)
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+  useEffect(() => {
+    if (open) {
+      setDigits(['', '', '', '', '', ''])
+      setError('')
+      setStatus('idle')
+      setResendCooldown(30)
+      setTimeout(() => inputsRef.current[0]?.focus(), 50)
+    } else {
+      clearInterval(resendTimerRef.current)
+    }
+    return () => clearInterval(resendTimerRef.current)
+  }, [open])
+
+  useEffect(() => {
+    if (resendCooldown <= 0) {
+      clearInterval(resendTimerRef.current)
+      return
+    }
+    resendTimerRef.current = setInterval(() => {
+      setResendCooldown((s) => (s <= 1 ? 0 : s - 1))
+    }, 1000)
+    return () => clearInterval(resendTimerRef.current)
+  }, [resendCooldown])
+
+  const updateDigit = (index, value) => {
+    if (!/^[0-9]?$/.test(value)) return
+    const next = [...digits]
+    next[index] = value
+    setDigits(next)
+    if (value && index < 5) inputsRef.current[index + 1]?.focus()
+  }
+
+  const handleKeyDown = (e, idx) => {
+    if (e.key === 'Backspace' && !digits[idx] && idx > 0) inputsRef.current[idx - 1]?.focus()
+  }
+
+  const collectCode = () => digits.join('')
+
+  const verify = async () => {
+    const code = collectCode()
+    if (code.length !== 6) return setError('Enter the 6-digit code')
+    setStatus('verifying')
+    setError('')
+    try {
+      // Debug: log payload so we can inspect what is actually sent
+      console.log('[OTP verify] payload:', { email, otp: code })
+      const res = await fetch(`${API_BASE}/otp/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp: code }),
+      })
+      if (res.ok) {
+        setStatus('success')
+        setTimeout(() => onVerified?.(), 600)
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setError(d.detail || d.message || 'Verification failed')
+        setStatus('idle')
+      }
+    } catch (err) {
+      console.error('OTP verify error', err)
+      setError('Network error while verifying')
+      setStatus('idle')
+    }
+  }
+
+  const resend = async () => {
+    if (resendCooldown > 0) return
+    try {
+      setResendCooldown(30)
+      await fetch(`${API_BASE}/otp/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name }),
+      })
+    } catch (err) {
+      console.error('OTP resend error', err)
+      setError('Network error while requesting code')
+    }
+  }
+
+  if (!open) return null
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 13000 }} onKeyDown={(e) => e.key === 'Escape' && onClose?.()}>
+      <div style={{ position: 'absolute', inset: 0, backdropFilter: 'blur(6px)', background: 'rgba(8,8,8,0.56)' }} onClick={onClose} />
+      <div style={{ position: 'relative', maxWidth: 520, margin: '8vh auto', background: '#0b1220', color: '#eafaf1', borderRadius: 12, padding: 20, boxShadow: '0 18px 60px rgba(0,0,0,0.6)' }}>
+        <h3 style={{ marginTop: 0 }}>Email Verification</h3>
+        <p style={{ marginTop: 6, color: '#bcd8c8' }}>A 6-digit code was sent to <strong>{email}</strong>. Enter it below to continue.</p>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 14 }}>
+          {digits.map((d, i) => (
+            <input key={i}
+              ref={(el) => (inputsRef.current[i] = el)}
+              value={d}
+              onChange={(e) => updateDigit(i, e.target.value.trim())}
+              onKeyDown={(e) => handleKeyDown(e, i)}
+              inputMode="numeric"
+              maxLength={1}
+              style={{ width: 42, height: 52, fontSize: 20, textAlign: 'center', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', background: '#081018', color: '#fff' }}
+            />
+          ))}
+        </div>
+
+        {error ? <p style={{ color: '#ffb4b4', marginTop: 10 }}>{error}</p> : null}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18 }}>
+          <div>
+            <button onClick={verify} disabled={status === 'verifying'} style={{ padding: '8px 14px', borderRadius: 8, background: '#1f8a4b', color: '#fff', border: 'none' }}>{status === 'verifying' ? 'Verifying...' : 'Verify'}</button>
+            <button onClick={onClose} style={{ marginLeft: 10, padding: '8px 12px', borderRadius: 8, background: 'transparent', color: '#cfe9d9', border: '1px solid rgba(255,255,255,0.06)' }}>Cancel</button>
+          </div>
+
+          <div style={{ textAlign: 'right' }}>
+            <button onClick={resend} disabled={resendCooldown > 0} style={{ padding: '6px 10px', borderRadius: 8, background: 'transparent', color: resendCooldown > 0 ? '#8aa392' : '#d6ffe0', border: '1px solid rgba(255,255,255,0.06)' }}>{resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}</button>
+          </div>
+        </div>
+
+        {status === 'success' ? (<div style={{ marginTop: 14, color: '#aef0c5' }}>✓ Verified</div>) : null}
+      </div>
+    </div>
+  )
+}
+
 const FADE_DURATION_MS = 300
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -82,6 +215,8 @@ export default function HomePage() {
     details: '',
   })
   const [meetingRequestMessage, setMeetingRequestMessage] = useState('')
+  const [otpOpen, setOtpOpen] = useState(false)
+  const [pendingMeeting, setPendingMeeting] = useState(null)
 
   const {
     content,
@@ -141,27 +276,61 @@ export default function HomePage() {
       setMeetingRequestMessage('Edit mode is active. Save changes from the CMS modal instead of submitting the form.')
       return
     }
-
     const finalTopic = meetingRequest.topic === 'Others'
       ? meetingRequest.topicOther.trim()
       : meetingRequest.topic
 
     if (!finalTopic) return
 
+    // Basic validation
+    if (!meetingRequest.email || !meetingRequest.fullName || !meetingRequest.contactNumber) {
+      setMeetingRequestMessage('Please complete all required fields (name, contact, email).')
+      return
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(meetingRequest.email)) {
+      setMeetingRequestMessage('Please enter a valid email address.')
+      return
+    }
+
+    // Prepare pending payload and request OTP
+    const payload = {
+      fullName: meetingRequest.fullName,
+      contactNumber: meetingRequest.contactNumber,
+      email: meetingRequest.email,
+      preferredDate: meetingRequest.preferredDate,
+      preferredTime: meetingRequest.preferredTime,
+      topic: finalTopic,
+      topicOther: meetingRequest.topicOther,
+      details: meetingRequest.details,
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/otp/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: meetingRequest.email, name: meetingRequest.fullName })
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setMeetingRequestMessage(d.detail || d.message || 'Unable to send verification code')
+        return
+      }
+      setPendingMeeting(payload)
+      setOtpOpen(true)
+      setMeetingRequestMessage('')
+    } catch (err) {
+      console.error('OTP generate error', err)
+      setMeetingRequestMessage('Network error: unable to request verification code')
+    }
+  }
+
+  const handleOtpVerified = async () => {
+    if (!pendingMeeting) return
     try {
       const response = await fetch(`${API_BASE}/meeting-request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fullName: meetingRequest.fullName,
-          contactNumber: meetingRequest.contactNumber,
-          email: meetingRequest.email,
-          preferredDate: meetingRequest.preferredDate,
-          preferredTime: meetingRequest.preferredTime,
-          topic: finalTopic,
-          topicOther: meetingRequest.topicOther,
-          details: meetingRequest.details,
-        }),
+        body: JSON.stringify(pendingMeeting),
       })
 
       if (response.ok) {
@@ -180,8 +349,11 @@ export default function HomePage() {
         setMeetingRequestMessage('⚠ Failed to submit meeting request. Please try again.')
       }
     } catch (error) {
-      console.error('Meeting request error:', error)
-      setMeetingRequestMessage('⚠ Error submitting request. Please check your connection.')
+      console.error('Meeting request error after OTP:', error)
+      setMeetingRequestMessage('⚠ Error submitting request after verification.')
+    } finally {
+      setPendingMeeting(null)
+      setOtpOpen(false)
     }
   }
 
@@ -446,6 +618,13 @@ export default function HomePage() {
         pageKey="home"
         isSaving={isSaving}
         saveError={saveError}
+      />
+      <OTPModal
+        open={otpOpen}
+        email={meetingRequest.email}
+        name={meetingRequest.fullName}
+        onClose={() => setOtpOpen(false)}
+        onVerified={handleOtpVerified}
       />
     </div>
   )

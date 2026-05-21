@@ -28,10 +28,123 @@ import hmac
 import binascii
 import jwt
 from datetime import datetime, timedelta, timezone
+import random
+import smtplib
+import ssl
+from email.message import EmailMessage
+from typing import Dict
 
 load_dotenv()
 
 app = FastAPI(title="Amadeo Coffee Prediction API", version="3.0.0")
+
+# ── OTP in-memory store (temporary) ───────────────────────────
+# Structure: { email: { otp: str, expires_at: datetime, last_sent: datetime, attempts: int } }
+OTP_STORE: Dict[str, dict] = {}
+OTP_EXPIRY_SECONDS = int(os.getenv('OTP_EXPIRY_SECONDS', '300'))  # 5 minutes default
+OTP_RESEND_COOLDOWN = int(os.getenv('OTP_RESEND_COOLDOWN', '30'))  # 30 seconds default
+OTP_MAX_REQUESTS_PER_HOUR = int(os.getenv('OTP_MAX_REQUESTS_PER_HOUR', '10'))
+
+# Simple in-memory metrics for OTP events (for demo/diagnostics)
+OTP_METRICS = {
+    'generated': 0,
+    'sent_success': 0,
+    'sent_failure': 0,
+    'verified': 0,
+    'invalid_attempt': 0,
+    'expired': 0,
+    'attempts_exceeded': 0,
+}
+
+
+def _inc_metric(key: str, n: int = 1):
+    try:
+        OTP_METRICS[key] = OTP_METRICS.get(key, 0) + n
+    except Exception:
+        pass
+
+
+def _generate_6_digit_otp() -> str:
+    return f"{random.randint(0, 999999):06d}"
+
+
+def _can_send_otp(email: str) -> (bool, str):
+    now = datetime.now(timezone.utc)
+    rec = OTP_STORE.get(email)
+    if rec:
+        last = rec.get('last_sent')
+        if last and (now - last).total_seconds() < OTP_RESEND_COOLDOWN:
+            wait = int(OTP_RESEND_COOLDOWN - (now - last).total_seconds())
+            return False, f"Please wait {wait}s before requesting a new code."
+        # simple hourly cap check
+        first_sent = rec.get('first_sent') or now
+        if (now - first_sent).total_seconds() < 3600 and rec.get('count', 0) >= OTP_MAX_REQUESTS_PER_HOUR:
+            return False, "Too many OTP requests. Try again later."
+    return True, ''
+
+
+def _store_otp(email: str, otp: str):
+    now = datetime.now(timezone.utc)
+    rec = OTP_STORE.get(email) or {}
+    rec.update({
+        'otp': otp,
+        'expires_at': now + timedelta(seconds=OTP_EXPIRY_SECONDS),
+        'last_sent': now,
+        'count': (rec.get('count') or 0) + 1,
+        'first_sent': rec.get('first_sent') or now,
+        'attempts': 0,
+    })
+    OTP_STORE[email] = rec
+
+
+def _clear_otp(email: str):
+    try:
+        OTP_STORE.pop(email, None)
+    except Exception:
+        pass
+
+
+def _send_otp_email(to_email: str, recipient_name: str, otp: str):
+    smtp_host = os.getenv('SMTP_HOST')
+    smtp_port = int(os.getenv('SMTP_PORT', '587'))
+    smtp_user = os.getenv('SMTP_USER')
+    smtp_pass = os.getenv('SMTP_PASS')
+    from_email = os.getenv('FROM_EMAIL', smtp_user or 'noreply@example.com')
+
+    if not smtp_host or not smtp_user or not smtp_pass:
+        print('SMTP not configured; skipping email send (development).')
+        return True
+
+    msg = EmailMessage()
+    msg['Subject'] = f"Hello {recipient_name}, Your verification code"
+    msg['From'] = from_email
+    msg['To'] = to_email
+    body = f"""
+<html>
+  <body style="font-family:Segoe UI, Roboto, Helvetica, Arial, sans-serif; color:#0b2a2b;">
+    <p>Hi {recipient_name},</p>
+    <p>Your verification code is:</p>
+    <h2 style="letter-spacing:6px">{otp}</h2>
+    <p>This OTP will expire in {int(OTP_EXPIRY_SECONDS/60)} minutes.</p>
+    <p>If you did not request this, please ignore this email.</p>
+    <hr />
+    <small>Amadeo Coffee · FITS Center</small>
+  </body>
+</html>
+"""
+    msg.set_content(f"Your verification code is: {otp}\nThis OTP will expire in {int(OTP_EXPIRY_SECONDS/60)} minutes.")
+    msg.add_alternative(body, subtype='html')
+
+    context = ssl.create_default_context()
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+            server.starttls(context=context)
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        print('Failed to send OTP email:', e)
+        return False
 
 
 def parse_cors_origins() -> list[str]:
@@ -198,17 +311,17 @@ def supabase_insert(table: str, data: dict, return_representation: bool = False)
         }
         res = requests.post(url, json=data, headers=headers, timeout=10)
         if res.status_code in [200, 201]:
-            print(f"✓ Saved to Supabase — {table}")
+            print(f"Saved to Supabase - {table}")
             if return_representation:
                 try:
                     return res.json()
                 except Exception:
                     return None
             return True
-        print(f"⚠ Supabase insert failed: {res.status_code} {res.text}")
+        print(f"Supabase insert failed: {res.status_code} {res.text}")
         return None
     except Exception as e:
-        print(f"⚠ Supabase error: {e}")
+        print(f"Supabase error: {e}")
         return None
 
 def supabase_select(table: str, order: str = "created_at", desc: bool = True, limit: int = 100):
@@ -247,7 +360,7 @@ def supabase_update(table: str, id: str, data: dict):
         res = requests.patch(url, json=data, headers=headers, timeout=10)
         
         if res.status_code in [200, 204]:
-            print(f"✓ Updated {table} (id={id})")
+            print(f"Updated {table} (id={id})")
             return True, "Success"
         else:
             error_msg = f"Status {res.status_code}: {res.text}"
@@ -270,7 +383,7 @@ def supabase_delete(table: str, id: str):
         }
         res = requests.delete(url, headers=headers, timeout=10)
         if res.status_code in [200, 204]:
-            print(f"✓ Deleted {table} (id={id})")
+            print(f"Deleted {table} (id={id})")
             return True, "Success"
         error_msg = f"Status {res.status_code}: {res.text}"
         print(f"⚠ Supabase delete failed: {error_msg}")
@@ -279,6 +392,94 @@ def supabase_delete(table: str, id: str):
         error_msg = f"Exception: {str(e)}"
         print(f"⚠ Supabase delete error: {error_msg}")
         return False, error_msg
+
+
+# ── OTP API endpoints ─────────────────────────────────────────
+@app.post('/otp/generate')
+async def api_generate_otp(payload: dict):
+    email = (payload.get('email') or '').strip().lower()
+    name = (payload.get('name') or '').strip() or 'User'
+    if not email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        raise HTTPException(status_code=400, detail='Invalid email')
+
+    ok, msg = _can_send_otp(email)
+    if not ok:
+        raise HTTPException(status_code=429, detail=msg)
+
+    otp = _generate_6_digit_otp()
+    _store_otp(email, otp)
+    _inc_metric('generated')
+    # For local development: optionally print the OTP to the server logs when DEV_SHOW_OTP=1
+    if os.getenv('DEV_SHOW_OTP', '').lower() in ('1', 'true', 'yes'):
+        print(f"[DEV] OTP for {email}: {otp}")
+    sent = _send_otp_email(email, name, otp)
+    if sent:
+        _inc_metric('sent_success')
+    else:
+        _inc_metric('sent_failure')
+        raise HTTPException(status_code=502, detail='Failed to send OTP email')
+
+    print(f"OTP generated for {email}; expires in {OTP_EXPIRY_SECONDS}s")
+    return { 'status': 'ok', 'message': 'OTP sent' }
+
+
+@app.post('/otp/verify')
+async def api_verify_otp(payload: dict):
+    # Debug: log incoming payload for troubleshooting
+    try:
+        print(f"DEBUG /otp/verify payload: {payload}")
+    except Exception:
+        pass
+    email = (payload.get('email') or '').strip().lower()
+    code = (payload.get('otp') or '').strip()
+    if not email or not code:
+        raise HTTPException(status_code=400, detail='Missing email or otp')
+
+    rec = OTP_STORE.get(email)
+    try:
+        print(f"DEBUG lookup rec for {email}: {rec}")
+    except Exception:
+        pass
+    if not rec:
+        _inc_metric('invalid_attempt')
+        raise HTTPException(status_code=400, detail='No OTP requested for this email')
+
+    now = datetime.now(timezone.utc)
+    if rec.get('expires_at') and now > rec['expires_at']:
+        _clear_otp(email)
+        _inc_metric('expired')
+        raise HTTPException(status_code=410, detail='OTP expired')
+
+    # increment attempts and guard against brute force
+    rec['attempts'] = (rec.get('attempts') or 0) + 1
+    if rec['attempts'] > 10:
+        _clear_otp(email)
+        _inc_metric('attempts_exceeded')
+        raise HTTPException(status_code=429, detail='Too many attempts')
+
+    if hmac.compare_digest(rec.get('otp',''), code):
+        _clear_otp(email)
+        _inc_metric('verified')
+        print(f"OTP verified for {email}")
+        return { 'status': 'ok', 'message': 'verified' }
+
+    _inc_metric('invalid_attempt')
+    return JSONResponse(status_code=400, content={ 'status': 'error', 'message': 'Invalid OTP' })
+
+
+@app.get('/otp/metrics')
+def get_otp_metrics():
+    # Remove expired OTPs for cleaner diagnostics
+    now = datetime.now(timezone.utc)
+    expired = []
+    for e, rec in list(OTP_STORE.items()):
+        if rec.get('expires_at') and now > rec['expires_at']:
+            expired.append(e)
+            OTP_STORE.pop(e, None)
+    if expired:
+        print(f"Cleaned {len(expired)} expired OTPs")
+    return { 'metrics': OTP_METRICS, 'active_otps': len(OTP_STORE) }
+
 
 
 # ── Admin auth helpers ─────────────────────────────────────────
@@ -905,7 +1106,7 @@ def send_email_notification(meeting: MeetingRequest):
     admin_email = os.getenv("ADMIN_EMAIL", "admin@amadeocoffee.ph")
     
     if not all([sender_email, sender_password]):
-        print("⚠ Email credentials not configured — skipping email")
+        print("Email credentials not configured - skipping email")
         return
     
     try:
@@ -955,7 +1156,7 @@ Amadeo Coffee Team
         admin_msg["Subject"] = admin_subject
         admin_msg.attach(MIMEText(admin_body, "plain"))
         server.send_message(admin_msg)
-        print(f"✓ Admin notification sent to {admin_email}")
+        print(f"Admin notification sent to {admin_email}")
         
         # User confirmation
         user_msg = MIMEMultipart()
@@ -964,7 +1165,7 @@ Amadeo Coffee Team
         user_msg["Subject"] = user_subject
         user_msg.attach(MIMEText(user_body, "plain"))
         server.send_message(user_msg)
-        print(f"✓ Confirmation sent to {meeting.email}")
+        print(f"Confirmation sent to {meeting.email}")
         
         server.quit()
     except Exception as e:
@@ -983,7 +1184,7 @@ def send_status_update_email(user_email: str, user_name: str, new_status: str, n
     sender_password = os.getenv("SENDER_PASSWORD")
     
     if not all([sender_email, sender_password]):
-        print("⚠ Email credentials not configured — skipping email")
+        print("Email credentials not configured - skipping email")
         return
     
     # Map status to message
@@ -1036,7 +1237,7 @@ Amadeo Coffee Team
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "plain"))
         server.send_message(msg)
-        print(f"✓ Status update email sent to {user_email}")
+        print(f"Status update email sent to {user_email}")
         
         server.quit()
     except Exception as e:
@@ -1103,7 +1304,7 @@ def update_meeting_request_status(request_id: str, update: MeetingStatusUpdate):
             "message": f"Meeting request with ID {request_id} not found"
         }
     
-    print(f"✓ DEBUG: Found meeting data, updating...")
+    print(f"DEBUG: Found meeting data, updating...")
     # Update status in database
     success, error_msg = supabase_update("meeting_requests", request_id, {
         "status": update.status,
@@ -1189,17 +1390,17 @@ def get_cms_page_content(page: str):
                         content[section][title] = body
                     
                     print(f"Nested structure: {content}")
-                    print(f"✓ CMS fetch complete from Supabase\n")
+                    print(f"CMS fetch complete from Supabase\n")
                     return {"content": content}
             except Exception as e:
                 print(f"⚠ Supabase fetch failed: {e}, falling back to memory")
         
         # Fallback to in-memory storage
         if page in cms_storage:
-            print(f"✓ CMS fetch complete from memory\n")
+            print(f"CMS fetch complete from memory\n")
             return {"content": cms_storage[page]}
         
-        print(f"✓ No CMS content found, returning empty\n")
+        print(f"No CMS content found, returning empty\n")
         return {"content": {}}
         
     except Exception as e:
@@ -1279,14 +1480,14 @@ def update_cms_page_content(page: str, updates: dict):
                                 print(f"    Error response: {insert_res.text}")
                             saved_count += 1
                 
-                print(f"\n✓ Supabase save complete - {saved_count} records saved\n")
+                print(f"\nSupabase save complete - {saved_count} records saved\n")
                 saved_location = "Supabase"
             except Exception as e:
                 print(f"⚠ Supabase save failed: {e}, falling back to memory\n")
         
         # Always save to memory as backup
         cms_storage[page] = updates
-        print(f"✓ Also saved to memory storage")
+        print(f"Also saved to memory storage")
         
         return {
             "status": "success",
