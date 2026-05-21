@@ -84,44 +84,65 @@
   margin: 0 0 0.85rem;
 }
 
-/* ── Sliders ── */
-.cp-slider-group {
-  margin-bottom: 1rem;
+/* ── Climate inputs ── */
+.cp-climate-field {
+  margin-bottom: 0.95rem;
+  padding: 0.85rem;
+  border: 1px solid #e8e1d4;
+  border-radius: 9px;
+  background: #fcfbf8;
 }
-.cp-slider-group:last-child {
+.cp-climate-field:last-child {
   margin-bottom: 0;
 }
-.cp-slider-row {
+.cp-climate-head {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.cp-climate-ideal {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #5a9e1e;
+  text-align: right;
+}
+.cp-climate-row {
+  display: flex;
   align-items: center;
-  margin-bottom: 4px;
+  gap: 0.55rem;
 }
-.cp-slider-name {
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: #333;
+.cp-climate-input {
+  flex: 1;
+  min-width: 0;
 }
-.cp-slider-val {
-  font-size: 0.82rem;
-  font-weight: 700;
+.cp-climate-input::-webkit-outer-spin-button,
+.cp-climate-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.cp-climate-input[type="number"] {
+  appearance: textfield;
+}
+.cp-climate-unit {
+  min-width: 2.8rem;
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid #d8d0c0;
+  background: #f4f1ea;
   color: #2d4a0e;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
 }
-.cp-slider {
-  width: 100%;
-  accent-color: #5a9e1e;
-  cursor: pointer;
-}
-.cp-slider-foot {
+.cp-climate-foot {
   display: flex;
   justify-content: space-between;
+  gap: 1rem;
   font-size: 0.67rem;
   color: #aaa;
-  margin-top: 3px;
-}
-.cp-ideal {
-  color: #5a9e1e;
-  font-weight: 600;
+  margin-top: 0.45rem;
 }
 
 /* ── Form fields ── */

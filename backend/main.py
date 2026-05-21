@@ -754,8 +754,16 @@ class MeetingRequest(BaseModel):
     details: str
 
 class MeetingStatusUpdate(BaseModel):
-    status: str  # "pending", "approved", "rejected", "completed"
-    notes: str = ""
+    status: str | None = None  # "pending", "approved", "rejected", "completed"
+    notes: str | None = None
+    fullName: str | None = None
+    contactNumber: str | None = None
+    email: str | None = None
+    preferredDate: str | None = None
+    preferredTime: str | None = None
+    topic: str | None = None
+    topicOther: str | None = None
+    details: str | None = None
 
 
 # ── Helpers ───────────────────────────────────────────────────
@@ -1276,7 +1284,7 @@ def create_meeting_request(meeting: MeetingRequest):
 @app.get("/meeting-requests")
 def get_meeting_requests():
     """Fetch all meeting requests (admin only)."""
-    requests = supabase_select("meeting_requests", order="created_at", desc=True, limit=100)
+    requests = supabase_select("meeting_requests", order="created_at", desc=True, limit=1000)
     return {
         "total": len(requests),
         "requests": requests
@@ -1287,6 +1295,13 @@ def get_meeting_requests():
 def update_meeting_request_status(request_id: str, update: MeetingStatusUpdate):
     """Update meeting request status and send email to user."""
     print(f"🔍 DEBUG: Received PUT request for ID: {request_id}, Status: {update.status}")
+
+    allowed_statuses = {"pending", "approved", "rejected", "completed"}
+    if update.status is not None and update.status not in allowed_statuses:
+        return {
+            "status": "error",
+            "message": f"Invalid status '{update.status}'"
+        }
     
     # Fetch the request first to get user details
     requests_list = supabase_select("meeting_requests", order="created_at", desc=False, limit=1000)
@@ -1303,13 +1318,38 @@ def update_meeting_request_status(request_id: str, update: MeetingStatusUpdate):
             "status": "error",
             "message": f"Meeting request with ID {request_id} not found"
         }
+
+    update_payload = {}
+    for field_name in [
+        "fullName",
+        "contactNumber",
+        "email",
+        "preferredDate",
+        "preferredTime",
+        "topic",
+        "topicOther",
+        "details",
+        "status",
+        "notes",
+    ]:
+        value = getattr(update, field_name)
+        if value is None:
+            continue
+
+        if field_name in {"status", "notes"}:
+            update_payload[field_name] = value
+        else:
+            update_payload[re.sub(r"([a-z])([A-Z])", r"\1_\2", field_name).lower()] = value
+
+    if not update_payload:
+        return {
+            "status": "error",
+            "message": "No changes provided"
+        }
     
     print(f"DEBUG: Found meeting data, updating...")
     # Update status in database
-    success, error_msg = supabase_update("meeting_requests", request_id, {
-        "status": update.status,
-        "notes": update.notes,
-    })
+    success, error_msg = supabase_update("meeting_requests", request_id, update_payload)
     print(f"🔍 DEBUG: Update result - Success: {success}, Error: {error_msg}")
     
     if not success:
@@ -1318,20 +1358,41 @@ def update_meeting_request_status(request_id: str, update: MeetingStatusUpdate):
             "message": f"Failed to update meeting request: {error_msg}"
         }
     
-    # Send status update email to user
-    send_status_update_email(
-        user_email=meeting_data.get("email"),
-        user_name=meeting_data.get("full_name"),
-        new_status=update.status,
-        notes=update.notes
-    )
+    # Send status update email to user only when the status changes
+    if update.status is not None:
+        send_status_update_email(
+            user_email=meeting_data.get("email"),
+            user_name=meeting_data.get("full_name"),
+            new_status=update.status,
+            notes=update.notes or ""
+        )
     
     return {
         "status": "success",
-        "message": f"Meeting request status updated to {update.status}",
+        "message": f"Meeting request updated to {update.status or 'the edited values'}",
         "data": {
             "id": request_id,
             "new_status": update.status
+        }
+    }
+
+
+@app.delete("/meeting-request/{request_id}")
+def delete_meeting_request(request_id: str):
+    """Delete a meeting request by ID."""
+    success, error_msg = supabase_delete("meeting_requests", request_id)
+
+    if not success:
+        return {
+            "status": "error",
+            "message": f"Failed to delete meeting request: {error_msg}"
+        }
+
+    return {
+        "status": "success",
+        "message": "Meeting request deleted",
+        "data": {
+            "id": request_id
         }
     }
 

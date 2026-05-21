@@ -137,7 +137,7 @@ function AmadeoMap({ suits, hovered, setHovered, setTip }) {
 // ── Main Component ───────────────────────────────────────────
 export default function CoffeePrediction() {
   const [inputs, setInputs] = useState({
-    temperature: 22, humidity: 75, rainfall: 500,
+    temperature: '22', humidity: '75', rainfall: '500',
     area_ha: 1.0, barangay: 'Pangil', year: 2025,
   })
   const [result,  setResult]  = useState(null)
@@ -147,15 +147,40 @@ export default function CoffeePrediction() {
   const [hovered, setHovered] = useState(null)
   const [tip,     setTip]     = useState({ show: false, x: 0, y: 0 })
 
+  const climateFields = [
+    { key: 'temperature', label: 'Temperature', unit: '°C', min: 15, max: 35, step: 1, ideal: '18–24°C', placeholder: 'Enter temperature' },
+    { key: 'humidity', label: 'Humidity', unit: '%', min: 30, max: 100, step: 1, ideal: '65–85%', placeholder: 'Enter humidity' },
+    { key: 'rainfall', label: 'Annual Rainfall', unit: 'mm', min: 50, max: 2000, step: 10, ideal: '150–300 mm', placeholder: 'Enter annual rainfall' },
+  ]
+
+  function handleClimateChange(key, rawValue, min, max) {
+    const nextDigits = rawValue.replace(/[^0-9]/g, '')
+    if (!nextDigits) return
+    const nextValue = Math.min(max, Math.max(min, Number(nextDigits)))
+    set(key, String(nextValue))
+  }
+
+  function handleClimateKeyDown(event) {
+    if (['e', 'E', '+', '-', '.'].includes(event.key)) {
+      event.preventDefault()
+    }
+  }
+
+  const climateInputs = {
+    temperature: Number(inputs.temperature),
+    humidity: Number(inputs.humidity),
+    rainfall: Number(inputs.rainfall),
+  }
+
   const suits = Object.fromEntries(
     amadeoGeoJSON.features.map((f, i) => {
-      const base = computeScore(inputs.temperature, inputs.humidity, inputs.rainfall)
+      const base = computeScore(climateInputs.temperature, climateInputs.humidity, climateInputs.rainfall)
       const v = ((i * 7 + 3) % 11) / 100 - 0.05
       return [f.properties.ADM4_EN, Math.min(1, Math.max(0, base + v))]
     })
   )
 
-  const baseScore = computeScore(inputs.temperature, inputs.humidity, inputs.rainfall)
+  const baseScore = computeScore(climateInputs.temperature, climateInputs.humidity, climateInputs.rainfall)
   const baseSuit  = getSuitability(baseScore)
   const suitCount = Object.values(suits).filter(s => s >= 0.5).length
 
@@ -164,9 +189,9 @@ export default function CoffeePrediction() {
     setError(null)
     // Client-side validation to match backend schema and avoid 422
     const validationErrors = []
-    if (inputs.temperature < 15 || inputs.temperature > 35) validationErrors.push('Temperature must be between 15 and 35°C')
-    if (inputs.humidity < 30 || inputs.humidity > 100) validationErrors.push('Humidity must be between 30% and 100%')
-    if (inputs.rainfall < 50 || inputs.rainfall > 2000) validationErrors.push('Annual Rainfall must be between 50 and 2000 mm')
+    if (climateInputs.temperature < 15 || climateInputs.temperature > 35) validationErrors.push('Temperature must be between 15 and 35°C')
+    if (climateInputs.humidity < 30 || climateInputs.humidity > 100) validationErrors.push('Humidity must be between 30% and 100%')
+    if (climateInputs.rainfall < 50 || climateInputs.rainfall > 2000) validationErrors.push('Annual Rainfall must be between 50 and 2000 mm')
     if (inputs.year < 2020 || inputs.year > 2035) validationErrors.push('Year must be between 2020 and 2035')
     if (validationErrors.length > 0) {
       setError(validationErrors.join('; '))
@@ -182,10 +207,14 @@ export default function CoffeePrediction() {
       window.setTimeout(() => setClampNote(''), 5000)
     }
     try {
+      const payload = {
+        ...inputs,
+        ...climateInputs,
+      }
       const res = await fetch(`${API_BASE}/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(inputs),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) {
         let bodyText = await res.text()
@@ -240,22 +269,31 @@ export default function CoffeePrediction() {
           {/* Climate inputs */}
           <div className="cp-card">
             <p className="cp-card-label">Climate Parameters</p>
-            {[
-              { key: 'temperature', label: 'Temperature',     unit: '°C',  min: 15,  max: 35,   step: 1,  ideal: '18–24°C' },
-              { key: 'humidity',    label: 'Humidity',        unit: '%',   min: 30,  max: 100,  step: 1,  ideal: '65–85%' },
-              { key: 'rainfall',    label: 'Annual Rainfall', unit: ' mm', min: 50,  max: 2000, step: 10, ideal: '150–300 mm' },
-            ].map(({ key, label, unit, min, max, step, ideal }) => (
-              <div key={key} className="cp-slider-group">
-                <div className="cp-slider-row">
-                  <span className="cp-slider-name">{label}</span>
-                  <span className="cp-slider-val">{inputs[key]}{unit}</span>
+            {climateFields.map(({ key, label, unit, min, max, step, ideal, placeholder }) => (
+              <div key={key} className="cp-climate-field">
+                <div className="cp-climate-head">
+                  <span className="cp-field-label">{label}</span>
+                  <span className="cp-climate-ideal">Ideal: {ideal}</span>
                 </div>
-                <input type="range" min={min} max={max} step={step}
-                  value={inputs[key]} onChange={e => set(key, +e.target.value)}
-                  className="cp-slider" />
-                <div className="cp-slider-foot">
+                <div className="cp-climate-row">
+                  <input
+                    type="number"
+                    min={min}
+                    max={max}
+                    step={step}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder={placeholder}
+                    value={inputs[key]}
+                    onChange={e => handleClimateChange(key, e.target.value, min, max)}
+                    onKeyDown={handleClimateKeyDown}
+                    className="cp-input cp-climate-input"
+                    aria-label={label}
+                  />
+                  <span className="cp-climate-unit">{unit}</span>
+                </div>
+                <div className="cp-climate-foot">
                   <span>{min}{unit}</span>
-                  <span className="cp-ideal">Ideal: {ideal}</span>
                   <span>{max}{unit}</span>
                 </div>
               </div>
@@ -328,7 +366,7 @@ export default function CoffeePrediction() {
               {/* Confidence badge */}
               <div className="cp-result-meta">
                 <span className="cp-conf-badge" style={{ background: confidenceColor + '22', color: confidenceColor, border: `1px solid ${confidenceColor}` }}>
-                  {result.confidence} Confidence
+                  {result.confidence} Suitable
                 </span>
                 <span className="cp-barangay-tag">{result.barangay} · {result.year}</span>
               </div>

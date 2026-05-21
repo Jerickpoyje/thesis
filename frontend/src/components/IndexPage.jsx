@@ -131,7 +131,7 @@ function SuitabilityMap({ suits }) {
         style={{ display: 'block', cursor: 'grab' }}
         onMouseDown={onMouseDown} onMouseMove={onMouseMove}
         onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onWheel={onWheel}>
-        <rect width={size.w} height={size.h} fill="#1a3a1a" rx="10" />
+        <rect width={size.w} height={size.h} fill="#ffffff" rx="10" />
         <g transform={transform}>
           {amadeoGeoJSON.features.map((feature, i) => {
             const name  = feature.properties.ADM4_EN
@@ -163,7 +163,7 @@ export default function IndexPage() {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isAdminAuthenticated())
 
   const [inputs, setInputs] = useState({
-    temperature: 22, humidity: 75, rainfall: 200,
+    temperature: '22', humidity: '75', rainfall: '200',
     area_ha: 1.0, barangay: 'Pangil', year: new Date().getFullYear(),
   })
   const [result,  setResult]  = useState(null)
@@ -207,14 +207,43 @@ export default function IndexPage() {
     setResult(null)
   }
 
+  const climateFields = [
+    { key: 'temperature', label: 'Temperature', unit: '°C', min: 15, max: 35, step: 1, ideal: '18–24°C', placeholder: 'Enter temperature' },
+    { key: 'humidity', label: 'Humidity', unit: '%', min: 30, max: 100, step: 1, ideal: '65–85%', placeholder: 'Enter humidity' },
+    { key: 'rainfall', label: 'Annual Rainfall', unit: 'mm', min: 50, max: 2000, step: 10, ideal: '150–300 mm', placeholder: 'Enter annual rainfall' },
+  ]
+
+  function handleClimateChange(key, rawValue, min, max) {
+    const nextDigits = rawValue.replace(/[^0-9]/g, '')
+    if (!nextDigits) return
+    const nextValue = Math.min(max, Math.max(min, Number(nextDigits)))
+    set(key, String(nextValue))
+  }
+
+  function handleClimateKeyDown(event) {
+    if (['e', 'E', '+', '-', '.'].includes(event.key)) {
+      event.preventDefault()
+    }
+  }
+
+  const climateInputs = {
+    temperature: Number(inputs.temperature),
+    humidity: Number(inputs.humidity),
+    rainfall: Number(inputs.rainfall),
+  }
+
   async function handlePredict() {
     setLoading(true)
     setError(null)
     try {
+      const payload = {
+        ...inputs,
+        ...climateInputs,
+      }
       const res = await fetch(`${API_BASE}/predict-public`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(inputs),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       setResult(await res.json())
@@ -228,13 +257,13 @@ export default function IndexPage() {
   // Per-barangay suitability scores
   const suits = Object.fromEntries(
     amadeoGeoJSON.features.map((f, i) => {
-      const base = computeScore(inputs.temperature, inputs.humidity, inputs.rainfall)
+      const base = computeScore(climateInputs.temperature, climateInputs.humidity, climateInputs.rainfall)
       const v = ((i * 7 + 3) % 11) / 100 - 0.05
       return [f.properties.ADM4_EN, Math.min(1, Math.max(0, base + v))]
     })
   )
 
-  const score     = computeScore(inputs.temperature, inputs.humidity, inputs.rainfall)
+  const score     = computeScore(climateInputs.temperature, climateInputs.humidity, climateInputs.rainfall)
   const suit      = getSuitability(score)
   const confColor = result?.confidence === 'High' ? '#4a9e2f'
     : result?.confidence === 'Medium' ? '#e09a1a' : '#d44444'
@@ -277,22 +306,31 @@ export default function IndexPage() {
           {/* Climate inputs */}
           <div className="up-card">
             <h2 className="up-card-title">🌡 Climate Parameters</h2>
-            {[
-              { key: 'temperature', label: 'Temperature',    unit: '°C',  min: 15,  max: 35,   step: 1,  ideal: '18–24°C' },
-              { key: 'humidity',    label: 'Humidity',       unit: '%',   min: 30,  max: 100,  step: 1,  ideal: '65–85%' },
-              { key: 'rainfall',    label: 'Annual Rainfall',unit: ' mm', min: 50,  max: 2000, step: 10, ideal: '150–300 mm' },
-            ].map(({ key, label, unit, min, max, step, ideal }) => (
-              <div key={key} className="up-slider-group">
-                <div className="up-slider-top">
-                  <span className="up-slider-label">{label}</span>
-                  <span className="up-slider-val">{inputs[key]}{unit}</span>
+            {climateFields.map(({ key, label, unit, min, max, step, ideal, placeholder }) => (
+              <div key={key} className="up-climate-field">
+                <div className="up-climate-head">
+                  <span className="up-field-label">{label}</span>
+                  <span className="up-climate-ideal">Ideal: {ideal}</span>
                 </div>
-                <input type="range" min={min} max={max} step={step}
-                  value={inputs[key]} onChange={e => set(key, +e.target.value)}
-                  className="up-slider" />
-                <div className="up-slider-foot">
+                <div className="up-climate-row">
+                  <input
+                    type="number"
+                    min={min}
+                    max={max}
+                    step={step}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder={placeholder}
+                    value={inputs[key]}
+                    onChange={e => handleClimateChange(key, e.target.value, min, max)}
+                    onKeyDown={handleClimateKeyDown}
+                    className="up-input up-climate-input"
+                    aria-label={label}
+                  />
+                  <span className="up-climate-unit">{unit}</span>
+                </div>
+                <div className="up-climate-foot">
                   <span>{min}{unit}</span>
-                  <span className="up-ideal">Ideal: {ideal}</span>
                   <span>{max}{unit}</span>
                 </div>
               </div>
@@ -342,7 +380,7 @@ export default function IndexPage() {
               <h2 className="up-card-title">📊 Prediction Results</h2>
               <div className="up-result-meta">
                 <span className="up-conf-pill" style={{ color: confColor, background: confColor + '18', border: `1px solid ${confColor}` }}>
-                  {result.confidence} Confidence
+                  {result.confidence} Suitable
                 </span>
                 <span className="up-result-loc">{result.barangay} · {result.year}</span>
               </div>
@@ -385,7 +423,7 @@ export default function IndexPage() {
           <div className="up-card up-map-card">
             <h2 className="up-card-title">🗺 Barangay Suitability Map</h2>
             <p className="up-map-subtitle">
-              Map colors update live as you adjust the climate sliders.
+              Map colors update live as you adjust the climate inputs.
               Hover over a barangay to see its suitability score.
             </p>
 
